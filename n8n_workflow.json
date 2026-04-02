@@ -1,0 +1,885 @@
+{
+  "name": "Video Generation Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "video-pipeline",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1f2b3c4-d5e6-7890-f1a2-b3c4d5e6f780",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        400
+      ],
+      "webhookId": "wh-video-pipeline-001"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "project_id",
+              "value": "={{ $json.body.project_id }}"
+            },
+            {
+              "name": "step",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "step1-notify",
+      "name": "Notify Step 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const theme      = $('Webhook Trigger').first().json.body.theme;\nconst project_id = $('Webhook Trigger').first().json.body.project_id;\n\nconst systemPrompt = 'Tu es un auteur de livres pour enfants. Tu génères des histoires adaptées à des enfants de 8 ans.';\n\nconst userPrompt = `Génère une histoire de 3 minutes (~450 mots) sur le thème : ${theme}.\\nPuis découpe-la en 12 scènes exactement.\\nRéponds UNIQUEMENT en JSON valide avec cette structure :\\n{\\n  \"story\": \"texte complet de l'histoire\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"visual_description\": \"description pour générer l'image/vidéo en anglais, style cartoon coloré pour enfants\",\\n      \"narration\": \"texte exact à narrer pour cette scène\",\\n      \"duration_seconds\": 15\\n    }\\n  ]\\n}\\nAssure-toi que la somme des durées = 180 secondes.`;\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    claudeBody: {\n      model: 'claude-sonnet-4-5',\n      max_tokens: 4096,\n      system: systemPrompt,\n      messages: [{ role: 'user', content: userPrompt }]\n    }\n  }\n}];"
+      },
+      "id": "b2c3d4e5-f6a7-8901-b2c3-d4e5f6a7b8c9",
+      "name": "Build Groq Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.groqBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "c3d4e5f6-a7b8-9012-c3d4-e5f6a7b8c9d0",
+      "name": "Call Groq API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme      = $('Build Groq Request').first().json.theme;\nconst response   = $input.first().json;\n\nconst rawText = response.choices?.[0]?.message?.content ?? '';\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/\\s*```$/,'').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse Groq JSON response: ' + e.message + '\\nRaw: ' + rawText.slice(0, 500));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('Groq returned no valid scenes.');\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story:  parsed.story  || '',\n    moral:  parsed.moral  || '',\n    scenes: parsed.scenes,\n  }\n}];"
+      },
+      "id": "d4e5f6a7-b8c9-0123-d4e5-f6a7b8c9d0e1",
+      "name": "Parse Groq Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "project_id",
+              "value": "={{ $json.project_id }}"
+            },
+            {
+              "name": "step",
+              "value": "2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "step2-notify",
+      "name": "Notify Step 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-1234-e5f6-a7b8c9d0e1f2",
+      "name": "Split Into Scenes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const batchItem = $input.first().json;\n\nconst globalData = $('Parse Claude Response').first().json;\n\nreturn [{\n  json: {\n    project_id:          globalData.project_id,\n    story:               globalData.story,\n    moral:               globalData.moral,\n    all_scenes:          globalData.scenes,\n    scene:               batchItem,\n    scene_number:        batchItem.scene_number,\n    narration:           batchItem.narration,\n    visual_description:  batchItem.visual_description,\n    duration_seconds:    batchItem.duration_seconds,\n  }\n}];"
+      },
+      "id": "prep-scene",
+      "name": "Prepare Scene Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $vars.ELEVENLABS_VOICE_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ text: $json.narration, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.7, similarity_boost: 0.8 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "audio_binary"
+            }
+          }
+        }
+      },
+      "id": "f6a7b8c9-d0e1-2345-f6a7-b8c9d0e1f2a3",
+      "name": "Generate Voice ElevenLabs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "fileName": "=/tmp/audio_scene_{{ $('Prepare Scene Data').first().json.scene_number }}.mp3",
+        "property": "audio_binary",
+        "options": {}
+      },
+      "id": "save-audio",
+      "name": "Save Audio MP3",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.replicate.com/v1/models/minimax/video-01/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.REPLICATE_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ input: { prompt: $('Prepare Scene Data').first().json.visual_description, duration: 6 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a7b8c9d0-e1f2-3456-a7b8-c9d0e1f2a3b4",
+      "name": "Create Replicate Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const replicateResponse = $input.first().json;\nconst sceneData         = $('Prepare Scene Data').first().json;\nconst audioSavedPath    = `/tmp/audio_scene_${sceneData.scene_number}.mp3`;\n\nif (!replicateResponse.id) {\n  throw new Error('Replicate returned no prediction ID: ' + JSON.stringify(replicateResponse));\n}\n\nreturn [{\n  json: {\n    project_id:    sceneData.project_id,\n    scene_number:  sceneData.scene_number,\n    narration:     sceneData.narration,\n    visual:        sceneData.visual_description,\n    duration:      sceneData.duration_seconds,\n    prediction_id: replicateResponse.id,\n    audio_path:    audioSavedPath,\n    story:         sceneData.story,\n    all_scenes:    sceneData.all_scenes,\n  }\n}];"
+      },
+      "id": "store-task",
+      "name": "Store Task Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "input1"
+      },
+      "id": "b8c9d0e1-f2a3-4567-b8c9-d0e1f2a3b4c5",
+      "name": "Runway Poll Entry",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3120,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": 30
+      },
+      "id": "c9d0e1f2-a3b4-5678-c9d0-e1f2a3b4c5d6",
+      "name": "Wait 30 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        400
+      ],
+      "webhookId": "wait-runway-poll"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.replicate.com/v1/predictions/{{ $json.prediction_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.REPLICATE_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d0e1f2a3-b4c5-6789-d0e1-f2a3b4c5d6e7",
+      "name": "Check Replicate Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "runway-succeeded",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "succeeded",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-c5d6-7890-e1f2-a3b4c5d6e7f8",
+      "name": "Is Prediction Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const predictionStatus = $input.first().json;\nconst taskCtx          = $('Store Task Info').first().json;\n\nconst videoUrl = predictionStatus.output?.[0] ?? '';\nif (!videoUrl) {\n  throw new Error('Replicate succeeded but no output URL found: ' + JSON.stringify(predictionStatus));\n}\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData[taskCtx.project_id]) {\n  staticData[taskCtx.project_id] = [];\n}\nstaticData[taskCtx.project_id].push({\n  scene_number: taskCtx.scene_number,\n  video_url:    videoUrl,\n  audio_path:   taskCtx.audio_path,\n  duration:     taskCtx.duration,\n  narration:    taskCtx.narration,\n  visual:       taskCtx.visual,\n});\n\nreturn [{\n  json: {\n    project_id:   taskCtx.project_id,\n    story:        taskCtx.story,\n    all_scenes:   taskCtx.all_scenes,\n    scene_number: taskCtx.scene_number,\n    video_url:    videoUrl,\n    audio_path:   taskCtx.audio_path,\n    duration:     taskCtx.duration,\n    narration:    taskCtx.narration,\n    visual:       taskCtx.visual,\n  }\n}];"
+      },
+      "id": "f2a3b4c5-d6e7-8901-f2a3-b4c5d6e7f8a9",
+      "name": "Extract Scene Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems   = $input.all();\nconst firstScene = allItems[0].json;\n\nconst staticData      = $getWorkflowStaticData('global');\nconst collectedScenes = (staticData[firstScene.project_id] || [])\n  .sort((a, b) => a.scene_number - b.scene_number);\ndelete staticData[firstScene.project_id];\n\nif (collectedScenes.length === 0) {\n  throw new Error('No scene results in static data for project ' + firstScene.project_id);\n}\n\nconst scenesForFfmpeg = collectedScenes.map(s => ({\n  scene_number:       s.scene_number,\n  video_url:          s.video_url,\n  audio_url:          s.audio_path,\n  narration:          s.narration,\n  visual_description: s.visual,\n  duration_seconds:   s.duration,\n}));\n\nconst scenesB64  = Buffer.from(JSON.stringify(scenesForFfmpeg)).toString('base64');\nconst story      = firstScene.story || '';\nconst allScenes  = firstScene.all_scenes || scenesForFfmpeg;\n\nreturn [{\n  json: {\n    project_id:  firstScene.project_id,\n    story,\n    all_scenes:  allScenes,\n    scenes_b64:  scenesB64,\n    output_path: `/storage/videos/${firstScene.project_id}.mp4`,\n  }\n}];"
+      },
+      "id": "a3b4c5d6-e7f8-9012-a3b4-c5d6e7f8a9b0",
+      "name": "Prepare FFmpeg Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "project_id",
+              "value": "={{ $json.project_id }}"
+            },
+            {
+              "name": "step",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "step5-notify",
+      "name": "Notify Step 5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/assemble",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ project_id: $json.project_id, scenes_b64: $json.scenes_b64, output_path: $json.output_path, story: $json.story, all_scenes: $json.all_scenes }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "b4c5d6e7-f8a9-0123-b4c5-d6e7f8a9b0c1",
+      "name": "Run FFmpeg Assembly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const assembleResp = $input.first().json;\nconst ffmpegData   = $('Prepare FFmpeg Data').first().json;\n\nif (assembleResp.error) {\n  throw new Error('Assemble endpoint error: ' + assembleResp.error);\n}\n\nconst videoUrl = assembleResp.video_url || ('/storage/videos/' + ffmpegData.project_id + '.mp4');\n\nreturn [{\n  json: {\n    project_id:  ffmpegData.project_id,\n    video_url:   videoUrl,\n    story_text:  ffmpegData.story,\n    scenes_json: ffmpegData.all_scenes,\n  }\n}];"
+      },
+      "id": "prep-callback",
+      "name": "Prepare Callback Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/callback",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ project_id: $json.project_id, video_url: $json.video_url, story_text: $json.story_text, scenes_json: $json.scenes_json }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "c5d6e7f8-a9b0-1234-c5d6-e7f8a9b0c1d2",
+      "name": "Laravel Callback Success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5280,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/error",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Secret",
+              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ project_id: $('Webhook Trigger').first().json.body.project_id, error_message: $json.message || $json.error || 'Erreur inconnue dans le pipeline N8N' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Notify Step 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Step 1": {
+      "main": [
+        [
+          {
+            "node": "Build Groq Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Groq Request": {
+      "main": [
+        [
+          {
+            "node": "Call Groq API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Groq API": {
+      "main": [
+        [
+          {
+            "node": "Parse Groq Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Groq Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Step 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Step 2": {
+      "main": [
+        [
+          {
+            "node": "Split Into Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Scenes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Scene Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare FFmpeg Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Scene Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Voice ElevenLabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Voice ElevenLabs": {
+      "main": [
+        [
+          {
+            "node": "Save Audio MP3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Audio MP3": {
+      "main": [
+        [
+          {
+            "node": "Create Runway Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Replicate Prediction": {
+      "main": [
+        [
+          {
+            "node": "Store Task Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Task Info": {
+      "main": [
+        [
+          {
+            "node": "Runway Poll Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runway Poll Entry": {
+      "main": [
+        [
+          {
+            "node": "Wait 30 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Check Replicate Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Replicate Status": {
+      "main": [
+        [
+          {
+            "node": "Is Prediction Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Prediction Done?": {
+      "main": [
+        [
+          {
+            "node": "Extract Scene Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Runway Poll Entry",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Extract Scene Result": {
+      "main": [
+        [
+          {
+            "node": "Split Into Scenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare FFmpeg Data": {
+      "main": [
+        [
+          {
+            "node": "Notify Step 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Step 5": {
+      "main": [
+        [
+          {
+            "node": "Run FFmpeg Assembly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run FFmpeg Assembly": {
+      "main": [
+        [
+          {
+            "node": "Prepare Callback Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Callback Payload": {
+      "main": [
+        [
+          {
+            "node": "Laravel Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "v1-video-pipeline-2024",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "00000000000000000000000000000001"
+  },
+  "id": "VIDEO_PIPELINE_V1",
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "tag_video_gen",
+      "name": "video-generation"
+    }
+  ]
+}

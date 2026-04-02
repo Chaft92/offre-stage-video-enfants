@@ -1,0 +1,40 @@
+# Environment — never commit real keys
+.env
+.env.backup
+
+# Laravel generated
+/vendor/
+/node_modules/
+/public/hot
+/public/storage
+/storage/*.key
+/bootstrap/cache/*.php
+Homestead.json
+Homestead.yaml
+
+# Dev artefacts
+dev_db.sqlite
+*.sqlite
+
+# Build outputs
+/public/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+/storage/logs/
+
+# PHP
+composer.lock

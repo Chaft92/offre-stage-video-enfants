@@ -1,0 +1,23 @@
+# Railway.app — build + deploy config for Laravel 11
+# Docs: https://docs.railway.app/guides/laravel
+
+[phases.setup]
+nixPkgs = ["php82", "php82Extensions.pdo", "php82Extensions.pdo_mysql",
+           "php82Extensions.mbstring", "php82Extensions.fileinfo",
+           "php82Extensions.curl", "php82Extensions.xml",
+           "php82Extensions.bcmath", "php82Extensions.zip",
+           "php82Extensions.intl", "php82Extensions.sodium",
+           "php82Extensions.openssl", "composer"]
+
+[phases.install]
+cmds = ["composer install --optimize-autoloader --no-dev --no-interaction"]
+
+[phases.build]
+cmds = [
+    "php artisan config:cache",
+    "php artisan route:cache",
+    "php artisan view:cache",
+]
+
+[start]
+cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"
