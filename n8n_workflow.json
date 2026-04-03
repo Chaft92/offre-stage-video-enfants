@@ -1,5 +1,5 @@
 {
-  "name": "Video Pipeline v3 - Robust",
+  "name": "Video Pipeline v4 - All Fetch",
   "nodes": [
     {
       "parameters": {
@@ -48,53 +48,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const webhookData = $('Webhook Trigger').first().json.body;\nconst theme = webhookData.theme;\nconst project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme in webhook body: ' + JSON.stringify(webhookData));\n}\n\nconst groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 4096,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un auteur de livres pour enfants de 8 ans. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown.'\n    },\n    {\n      role: 'user',\n      content: 'Genere une courte histoire pour enfants sur le theme : \"' + theme + '\".\\n\\nDecoupe-la en exactement 3 scenes.\\n\\nReponds avec ce JSON exact :\\n{\\n  \"story\": \"texte complet de histoire\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"visual_description\": \"A colorful cartoon scene showing...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    },\\n    {\\n      \"scene_number\": 2,\\n      \"visual_description\": \"A bright animated scene where...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    },\\n    {\\n      \"scene_number\": 3,\\n      \"visual_description\": \"A cheerful cartoon finale with...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    }\\n  ]\\n}'\n    }\n  ]\n};\n\nreturn [{ json: { project_id, theme, groqBody } }];"
+        "jsCode": "// ============================================================\n// Call Groq API with fetch() and parse the story JSON response\n// ============================================================\nconst webhookData = $('Webhook Trigger').first().json.body;\nconst theme = webhookData.theme;\nconst project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme from webhook');\n}\n\nconst GROQ_API_KEY = $vars.GROQ_API_KEY;\n\nconst groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 4096,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un auteur de livres pour enfants de 8 ans. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown.'\n    },\n    {\n      role: 'user',\n      content: 'Genere une courte histoire pour enfants sur le theme : \"' + theme + '\".\\n\\nDecoupe-la en exactement 3 scenes.\\n\\nReponds avec ce JSON exact :\\n{\\n  \"story\": \"texte complet\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"visual_description\": \"A colorful cartoon scene showing...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    },\\n    {\\n      \"scene_number\": 2,\\n      \"visual_description\": \"A bright animated scene where...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    },\\n    {\\n      \"scene_number\": 3,\\n      \"visual_description\": \"A cheerful cartoon finale with...\",\\n      \"narration\": \"texte de narration en francais\",\\n      \"duration_seconds\": 10\\n    }\\n  ]\\n}'\n    }\n  ]\n};\n\n// Call Groq via fetch - bypasses N8N HTTP Request Buffer bug\nconst groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'Bearer ' + GROQ_API_KEY,\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify(groqBody)\n});\n\nif (!groqRes.ok) {\n  const errText = await groqRes.text();\n  throw new Error('Groq API error ' + groqRes.status + ': ' + errText.slice(0, 500));\n}\n\nconst groqJson = await groqRes.json();\n\n// Extract content from Groq response\nlet rawContent = '';\ntry {\n  rawContent = groqJson.choices[0].message.content;\n} catch(e) {\n  throw new Error('Bad Groq response structure: ' + JSON.stringify(groqJson).slice(0, 500));\n}\n\nif (!rawContent || rawContent.trim().length === 0) {\n  throw new Error('Groq returned empty content');\n}\n\n// Clean markdown fences if present\nlet cleaned = rawContent.trim();\ncleaned = cleaned.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('JSON parse failed: ' + e.message + ' | Start: ' + cleaned.slice(0, 300));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes in response. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nconst scenes = parsed.scenes.map((s, i) => ({\n  scene_number: s.scene_number || (i + 1),\n  visual_description: s.visual_description || 'A colorful cartoon scene for children',\n  narration: s.narration || '',\n  duration_seconds: s.duration_seconds || 10\n}));\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story: parsed.story || '',\n    moral: parsed.moral || '',\n    scenes\n  }\n}];"
       },
-      "id": "build-groq",
-      "name": "Build Groq Request",
+      "id": "call-and-parse-groq",
+      "name": "Call and Parse Groq",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [720, 400]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.groq.com/openai/v1/chat/completions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {"name": "Authorization", "value": "={{ 'Bearer ' + $vars.GROQ_API_KEY }}"},
-            {"name": "Content-Type", "value": "application/json"}
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify($json.groqBody) }}",
-        "options": {
-          "timeout": 30000,
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "call-groq",
-      "name": "Call Groq API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [960, 400]
-    },
-    {
-      "parameters": {
-        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme = $('Build Groq Request').first().json.theme;\n\n// With responseFormat 'json', N8N auto-parses the HTTP response body\nconst groqResponse = $input.first().json;\n\n// The Groq API response structure: { choices: [{ message: { content: '...' } }] }\nlet rawContent = '';\ntry {\n  rawContent = groqResponse.choices[0].message.content;\n} catch (e) {\n  throw new Error('Cannot read Groq response structure. Keys: ' + Object.keys(groqResponse || {}).join(', ') + ' | Full: ' + JSON.stringify(groqResponse).slice(0, 500));\n}\n\nif (!rawContent || rawContent.trim().length === 0) {\n  throw new Error('Groq returned empty content');\n}\n\n// Clean: remove any markdown code fences just in case\nlet cleaned = rawContent.trim();\ncleaned = cleaned.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse story JSON: ' + e.message + ' | Content: ' + cleaned.slice(0, 300));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array in parsed response. Keys: ' + Object.keys(parsed).join(', '));\n}\n\n// Normalize scenes\nconst scenes = parsed.scenes.map((s, i) => ({\n  scene_number: s.scene_number || (i + 1),\n  visual_description: s.visual_description || 'A colorful cartoon scene for children',\n  narration: s.narration || '',\n  duration_seconds: s.duration_seconds || 10\n}));\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story: parsed.story || '',\n    moral: parsed.moral || '',\n    scenes\n  }\n}];"
-      },
-      "id": "parse-groq",
-      "name": "Parse Groq Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1200, 400]
     },
     {
       "parameters": {
@@ -124,28 +84,28 @@
       "name": "Notify Step 2",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1440, 400],
+      "position": [960, 400],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Generate ElevenLabs TTS for each scene sequentially\nconst data = $('Parse Groq Response').first().json;\nconst project_id = data.project_id;\nconst scenes = data.scenes;\nconst ELEVENLABS_KEY = $vars.ELEVENLABS_API_KEY;\nconst ELEVENLABS_VOICE = $vars.ELEVENLABS_VOICE_ID;\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Notify step 3\ntry {\n  await fetch(LARAVEL_URL + '/api/n8n/step', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': SECRET },\n    body: JSON.stringify({ project_id, step: 3 })\n  });\n} catch(e) { /* ignore notification errors */ }\n\nconst results = [];\n\nfor (const scene of scenes) {\n  let audioOk = false;\n  try {\n    const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + ELEVENLABS_VOICE, {\n      method: 'POST',\n      headers: {\n        'xi-api-key': ELEVENLABS_KEY,\n        'Content-Type': 'application/json',\n        'Accept': 'audio/mpeg'\n      },\n      body: JSON.stringify({\n        text: scene.narration,\n        model_id: 'eleven_multilingual_v2',\n        voice_settings: { stability: 0.7, similarity_boost: 0.8 }\n      })\n    });\n    audioOk = ttsRes.ok;\n  } catch(e) {\n    audioOk = false;\n  }\n\n  results.push({\n    scene_number: scene.scene_number,\n    visual_description: scene.visual_description,\n    narration: scene.narration,\n    duration_seconds: scene.duration_seconds,\n    audio_generated: audioOk\n  });\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme: data.theme,\n    story: data.story,\n    moral: data.moral,\n    scenes: results\n  }\n}];"
+        "jsCode": "// ============================================================\n// Generate ElevenLabs TTS for each scene via fetch()\n// ============================================================\nconst data = $('Call and Parse Groq').first().json;\nconst project_id = data.project_id;\nconst scenes = data.scenes;\nconst ELEVENLABS_KEY = $vars.ELEVENLABS_API_KEY;\nconst ELEVENLABS_VOICE = $vars.ELEVENLABS_VOICE_ID;\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Notify step 3\ntry {\n  await fetch(LARAVEL_URL + '/api/n8n/step', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': SECRET },\n    body: JSON.stringify({ project_id, step: 3 })\n  });\n} catch(e) { /* ignore */ }\n\nconst results = [];\n\nfor (const scene of scenes) {\n  let audioOk = false;\n  try {\n    const ttsRes = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + ELEVENLABS_VOICE, {\n      method: 'POST',\n      headers: {\n        'xi-api-key': ELEVENLABS_KEY,\n        'Content-Type': 'application/json',\n        'Accept': 'audio/mpeg'\n      },\n      body: JSON.stringify({\n        text: scene.narration,\n        model_id: 'eleven_multilingual_v2',\n        voice_settings: { stability: 0.7, similarity_boost: 0.8 }\n      })\n    });\n    audioOk = ttsRes.ok;\n  } catch(e) {\n    audioOk = false;\n  }\n\n  results.push({\n    scene_number: scene.scene_number,\n    visual_description: scene.visual_description,\n    narration: scene.narration,\n    duration_seconds: scene.duration_seconds,\n    audio_generated: audioOk\n  });\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme: data.theme,\n    story: data.story,\n    moral: data.moral,\n    scenes: results\n  }\n}];"
       },
       "id": "generate-all-audio",
       "name": "Generate All Audio",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1680, 400]
+      "position": [1200, 400]
     },
     {
       "parameters": {
-        "jsCode": "// Create Replicate predictions for each scene, then poll until done\nconst data = $input.first().json;\nconst project_id = data.project_id;\nconst scenes = data.scenes;\nconst REPLICATE_TOKEN = $vars.REPLICATE_API_TOKEN;\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Notify step 4\ntry {\n  await fetch(LARAVEL_URL + '/api/n8n/step', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': SECRET },\n    body: JSON.stringify({ project_id, step: 4 })\n  });\n} catch(e) { /* ignore */ }\n\nconst sceneResults = [];\n\nfor (const scene of scenes) {\n  let videoUrl = '';\n  try {\n    // Create prediction\n    const createRes = await fetch('https://api.replicate.com/v1/models/minimax/video-01/predictions', {\n      method: 'POST',\n      headers: {\n        'Authorization': 'Bearer ' + REPLICATE_TOKEN,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({\n        input: {\n          prompt: scene.visual_description\n        }\n      })\n    });\n\n    const createData = await createRes.json();\n    const predictionId = createData.id;\n\n    if (!predictionId) {\n      throw new Error('No prediction ID returned: ' + JSON.stringify(createData).slice(0, 200));\n    }\n\n    // Poll for completion (max 20 attempts = ~5 minutes)\n    let status = 'starting';\n    let output = null;\n    for (let attempt = 0; attempt < 20; attempt++) {\n      // Wait 15 seconds between polls\n      await new Promise(resolve => setTimeout(resolve, 15000));\n\n      const pollRes = await fetch('https://api.replicate.com/v1/predictions/' + predictionId, {\n        headers: { 'Authorization': 'Bearer ' + REPLICATE_TOKEN }\n      });\n      const pollData = await pollRes.json();\n      status = pollData.status;\n\n      if (status === 'succeeded') {\n        output = pollData.output;\n        break;\n      } else if (status === 'failed' || status === 'canceled') {\n        throw new Error('Replicate prediction ' + status + ': ' + (pollData.error || 'unknown'));\n      }\n      // else starting/processing -> continue polling\n    }\n\n    if (status === 'succeeded' && output) {\n      // output can be a string URL or an array\n      videoUrl = Array.isArray(output) ? output[0] : String(output);\n    } else if (status !== 'succeeded') {\n      throw new Error('Replicate timed out after 20 polls, status: ' + status);\n    }\n  } catch(e) {\n    videoUrl = 'error: ' + e.message;\n  }\n\n  sceneResults.push({\n    scene_number: scene.scene_number,\n    visual_description: scene.visual_description,\n    narration: scene.narration,\n    duration_seconds: scene.duration_seconds,\n    video_url: videoUrl\n  });\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme: data.theme,\n    story: data.story,\n    moral: data.moral,\n    scenes: sceneResults\n  }\n}];"
+        "jsCode": "// ============================================================\n// Generate Replicate video for each scene + poll until done\n// ============================================================\nconst data = $input.first().json;\nconst project_id = data.project_id;\nconst scenes = data.scenes;\nconst REPLICATE_TOKEN = $vars.REPLICATE_API_TOKEN;\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Notify step 4\ntry {\n  await fetch(LARAVEL_URL + '/api/n8n/step', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json', 'X-N8N-Secret': SECRET },\n    body: JSON.stringify({ project_id, step: 4 })\n  });\n} catch(e) { /* ignore */ }\n\nconst sceneResults = [];\n\nfor (const scene of scenes) {\n  let videoUrl = '';\n  try {\n    const createRes = await fetch('https://api.replicate.com/v1/models/minimax/video-01/predictions', {\n      method: 'POST',\n      headers: {\n        'Authorization': 'Bearer ' + REPLICATE_TOKEN,\n        'Content-Type': 'application/json'\n      },\n      body: JSON.stringify({ input: { prompt: scene.visual_description } })\n    });\n\n    const createData = await createRes.json();\n    const predictionId = createData.id;\n\n    if (!predictionId) {\n      throw new Error('No prediction ID: ' + JSON.stringify(createData).slice(0, 200));\n    }\n\n    let status = 'starting';\n    let output = null;\n    for (let attempt = 0; attempt < 20; attempt++) {\n      await new Promise(resolve => setTimeout(resolve, 15000));\n      const pollRes = await fetch('https://api.replicate.com/v1/predictions/' + predictionId, {\n        headers: { 'Authorization': 'Bearer ' + REPLICATE_TOKEN }\n      });\n      const pollData = await pollRes.json();\n      status = pollData.status;\n      if (status === 'succeeded') { output = pollData.output; break; }\n      if (status === 'failed' || status === 'canceled') {\n        throw new Error('Prediction ' + status + ': ' + (pollData.error || 'unknown'));\n      }\n    }\n\n    if (status === 'succeeded' && output) {\n      videoUrl = Array.isArray(output) ? output[0] : String(output);\n    } else if (status !== 'succeeded') {\n      throw new Error('Timed out, status: ' + status);\n    }\n  } catch(e) {\n    videoUrl = 'error: ' + e.message;\n  }\n\n  sceneResults.push({\n    scene_number: scene.scene_number,\n    visual_description: scene.visual_description,\n    narration: scene.narration,\n    duration_seconds: scene.duration_seconds,\n    video_url: videoUrl\n  });\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme: data.theme,\n    story: data.story,\n    moral: data.moral,\n    scenes: sceneResults\n  }\n}];"
       },
       "id": "generate-all-video",
       "name": "Generate All Video",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1920, 400]
+      "position": [1440, 400]
     },
     {
       "parameters": {
@@ -175,28 +135,18 @@
       "name": "Notify Step 5",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2160, 400],
+      "position": [1680, 400],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Build the final callback payload and send to Laravel\nconst data = $input.first().json;\nconst project_id = data.project_id;\nconst story = data.story || '';\nconst scenes = data.scenes || [];\n\n// Find the first valid video URL\nlet videoUrl = '';\nfor (const s of scenes) {\n  if (s.video_url && !s.video_url.startsWith('error:')) {\n    videoUrl = s.video_url;\n    break;\n  }\n}\n\n// Build scenes_json matching Laravel validation\nconst scenesJson = scenes.map(s => ({\n  scene_number: s.scene_number,\n  narration: s.narration || '',\n  visual_description: s.visual_description || '',\n  duration_seconds: s.duration_seconds || 10,\n  video_url: s.video_url || ''\n}));\n\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Send final callback\nconst callbackRes = await fetch(LARAVEL_URL + '/api/n8n/callback', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n    'Accept': 'application/json',\n    'X-N8N-Secret': SECRET\n  },\n  body: JSON.stringify({\n    project_id: project_id,\n    video_url: videoUrl || 'https://no-video-generated.example.com/placeholder',\n    story_text: story,\n    scenes_json: scenesJson\n  })\n});\n\nconst callbackBody = await callbackRes.text();\n\nreturn [{\n  json: {\n    project_id,\n    callback_status: callbackRes.status,\n    callback_response: callbackBody,\n    video_url: videoUrl,\n    total_scenes: scenes.length\n  }\n}];"
+        "jsCode": "// ============================================================\n// Send final callback to Laravel with all results\n// ============================================================\nconst data = $input.first().json;\nconst project_id = data.project_id;\nconst story = data.story || '';\nconst scenes = data.scenes || [];\n\nlet videoUrl = '';\nfor (const s of scenes) {\n  if (s.video_url && !s.video_url.startsWith('error:')) {\n    videoUrl = s.video_url;\n    break;\n  }\n}\n\nconst scenesJson = scenes.map(s => ({\n  scene_number: s.scene_number,\n  narration: s.narration || '',\n  visual_description: s.visual_description || '',\n  duration_seconds: s.duration_seconds || 10\n}));\n\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\nconst callbackRes = await fetch(LARAVEL_URL + '/api/n8n/callback', {\n  method: 'POST',\n  headers: {\n    'Content-Type': 'application/json',\n    'Accept': 'application/json',\n    'X-N8N-Secret': SECRET\n  },\n  body: JSON.stringify({\n    project_id: project_id,\n    video_url: videoUrl || 'https://demo-placeholder.example.com/video.mp4',\n    story_text: story,\n    scenes_json: scenesJson\n  })\n});\n\nconst callbackBody = await callbackRes.text();\n\nreturn [{\n  json: {\n    project_id,\n    callback_status: callbackRes.status,\n    callback_response: callbackBody,\n    video_url: videoUrl,\n    total_scenes: scenes.length\n  }\n}];"
       },
       "id": "final-callback",
       "name": "Final Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 400]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Error handler: notify Laravel that the pipeline failed\nconst LARAVEL_URL = $vars.LARAVEL_URL;\nconst SECRET = $vars.N8N_WEBHOOK_SECRET;\n\n// Try to extract project_id from various possible sources\nlet project_id = null;\ntry { project_id = $('Webhook Trigger').first().json.body.project_id; } catch(e) {}\nif (!project_id) {\n  try { project_id = $('Build Groq Request').first().json.project_id; } catch(e) {}\n}\n\nconst errorMessage = $input.first().json?.error?.message || $input.first().json?.message || 'Unknown pipeline error';\n\nif (project_id) {\n  try {\n    await fetch(LARAVEL_URL + '/api/n8n/error', {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Accept': 'application/json',\n        'X-N8N-Secret': SECRET\n      },\n      body: JSON.stringify({\n        project_id: project_id,\n        error_message: String(errorMessage).slice(0, 2000)\n      })\n    });\n  } catch(e) {\n    // Cannot notify Laravel, nothing we can do\n  }\n}\n\nreturn [{ json: { project_id, error: errorMessage, notified: !!project_id } }];"
-      },
-      "id": "error-handler",
-      "name": "Error Handler",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1200, 700]
+      "position": [1920, 400]
     }
   ],
   "connections": {
@@ -204,15 +154,9 @@
       "main": [[{"node": "Notify Step 1", "type": "main", "index": 0}]]
     },
     "Notify Step 1": {
-      "main": [[{"node": "Build Groq Request", "type": "main", "index": 0}]]
+      "main": [[{"node": "Call and Parse Groq", "type": "main", "index": 0}]]
     },
-    "Build Groq Request": {
-      "main": [[{"node": "Call Groq API", "type": "main", "index": 0}]]
-    },
-    "Call Groq API": {
-      "main": [[{"node": "Parse Groq Response", "type": "main", "index": 0}]]
-    },
-    "Parse Groq Response": {
+    "Call and Parse Groq": {
       "main": [[{"node": "Notify Step 2", "type": "main", "index": 0}]]
     },
     "Notify Step 2": {
