@@ -178,7 +178,7 @@ const workflow = {
       parameters: {
         httpMethod: "POST",
         path: "video-pipeline",
-        responseMode: "immediately",
+        responseMode: "onReceived",
         options: {}
       },
       id: "webhook-trigger",
