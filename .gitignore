@@ -38,3 +38,6 @@ __pycache__/
 
 # PHP
 composer.lock
+
+Claude*
+code.replace

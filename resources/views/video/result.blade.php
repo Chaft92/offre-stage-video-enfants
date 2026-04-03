@@ -87,9 +87,9 @@
         ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 3px; }
     </style>
 </head>
-<body class="gradient-bg min-h-screen py-10 px-4">
+<body class="gradient-bg min-h-screen py-10 px-4 relative overflow-hidden">
 
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl mx-auto relative z-10">
 
         <div class="text-center mb-8 fade-in-up">
             <span class="inline-block text-5xl mb-3">🎉</span>
@@ -115,6 +115,14 @@
         </div>
 
         <div class="mb-8 fade-in-up" style="animation-delay:0.1s">
+            @php
+                $hasVideo = $project->video_url
+                    && !str_contains($project->video_url, 'placeholder')
+                    && !str_contains($project->video_url, 'demo-mode')
+                    && filter_var($project->video_url, FILTER_VALIDATE_URL);
+            @endphp
+
+            @if($hasVideo)
             <div class="video-wrapper">
                 <video
                     controls
@@ -125,9 +133,26 @@
                     Votre navigateur ne supporte pas la lecture vidéo HTML5.
                 </video>
             </div>
+            @else
+            <div class="card-glass rounded-2xl p-8 text-center">
+                <span class="text-5xl mb-4 inline-block">🎥</span>
+                <h3 class="text-white text-lg font-semibold mb-2">Pipeline terminé avec succès !</h3>
+                <p class="text-gray-400 text-sm mb-3">
+                    L'histoire et les scènes ont été générées. La vidéo complète sera disponible
+                    lorsque le pipeline vidéo (Replicate) sera activé.
+                </p>
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Histoire &amp; scènes générées
+                </div>
+            </div>
+            @endif
 
             {{-- Boutons d'action --}}
             <div class="flex flex-col sm:flex-row gap-4 mt-5">
+                @if($hasVideo)
                 <a
                     href="{{ $project->video_url }}"
                     download="video_{{ $project->id }}_{{ Str::slug($project->theme, '_') }}.mp4"
@@ -138,6 +163,7 @@
                     </svg>
                     Télécharger la vidéo
                 </a>
+                @endif
                 <a
                     href="{{ route('video.index') }}"
                     class="btn-primary flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
@@ -152,12 +178,12 @@
             <a
                 href="/video/{{ $project->id }}/download"
                 class="mt-4 w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2
-                       bg-white/8 border border-white/15 text-gray-300 hover:bg-white/12 hover:text-white transition-all duration-200">
+                       bg-white/8 border border-white/15 text-gray-300 hover:bg-white/12 hover:text-white transition-all duration-200 block">
                 <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/>
                 </svg>
-                Télécharger le pack complet (.zip) &mdash; histoire, script, vidéo, voix off, scènes
+                Télécharger le pack complet (.zip) &mdash; histoire, script, scènes
             </a>
         </div>
 

@@ -1,12 +1,7 @@
 # 🎬 AI Kids Video Generator
 
-Application web Laravel 11 qui génère automatiquement une **vidéo animée de 3 minutes** pour enfants (8 ans) à partir d'un simple thème saisi par l'utilisateur. Le pipeline de génération est orchestré par **N8N** qui enchaîne Claude, ElevenLabs et Runway ML.
+Application web Laravel 11 qui génère automatiquement **une vidéo animée** pour enfants à partir d'un simple thème saisi par la personne/l'utilisateur. La pipeline de génération est orchestré par **N8N** qui enchaîne Claude puis ElevenLabs et pour finir, Runway ML.
 
----
-
-## Architecture
-
-```
 ┌─────────────────────────────────────────────────────────────┐
 │                     LARAVEL 11 (Backend + Frontend)         │
 │                                                             │
@@ -35,11 +30,6 @@ Application web Laravel 11 qui génère automatiquement une **vidéo animée de 
 │                             │  8. Callback → Laravel     │  │
 │                             └────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Prérequis
 
 | Outil             | Version minimum | Rôle                          |
 |-------------------|-----------------|-------------------------------|
@@ -54,11 +44,11 @@ Application web Laravel 11 qui génère automatiquement une **vidéo animée de 
 
 ---
 
-## Installation pas à pas
+### ---> INSTALLATION PAS A PAS NECESSAIRE POUR LE BON FONCTIONNEMENT DE L'APPLICATION : 
 
 ### 1. Cloner / créer le projet Laravel
 
-```bash
+``` bash
 # Si vous partez de zéro
 composer create-project laravel/laravel video-kids-generator "^11.0"
 cd video-kids-generator
@@ -302,5 +292,3 @@ Ouvrez [http://localhost:8000](http://localhost:8000), saisissez un thème et cl
 - **Production** : Configurez un vrai drive (S3, etc.) via `FILESYSTEM_DISK=s3` et adaptez la génération des URLs.
 
 ---
-
-*Projet réalisé dans le cadre d'un stage — Stack : Laravel 11 · N8N · Claude claude-sonnet-4-5 · ElevenLabs · Runway ML · FFmpeg*

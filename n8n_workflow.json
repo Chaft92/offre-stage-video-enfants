@@ -1,5 +1,5 @@
 {
-  "name": "Video Pipeline v5 - No Fetch",
+  "name": "Video Pipeline v6 — Groq + Replicate",
   "nodes": [
     {
       "parameters": {
@@ -120,7 +120,7 @@
     },
     {
       "parameters": {
-        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\n// Helper: recursively find Buffer byte array in any nested structure\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  // Direct Buffer: { type: 'Buffer', data: [123, 34, ...] }\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\n\n// Case A: N8N properly parsed the JSON response (ideal case)\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n}\n// Case B: data field is a plain string\nelse if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) {\n      content = g1.choices[0].message.content;\n    } else {\n      content = input.data;\n    }\n  } catch(e1) {\n    content = input.data;\n  }\n}\n// Case C: Response stored as Buffer somewhere in the object\nelse {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) {\n        content = g2.choices[0].message.content;\n      } else {\n        content = rawStr;\n      }\n    } catch(e2) {\n      content = rawStr;\n    }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Input keys: ' + Object.keys(input).join(', ') + ' | Sample: ' + JSON.stringify(input).substring(0, 300));\n}\n\n// Remove markdown code fences if present\nvar clean = content.trim();\nif (clean.indexOf('```') >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry {\n  parsed = JSON.parse(clean);\n} catch(e3) {\n  throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array found. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: sc.duration_seconds || 10\n  });\n}\n\nreturn [{\n  json: {\n    project_id: project_id,\n    theme: theme,\n    story: parsed.story || '',\n    moral: parsed.moral || '',\n    scenes: scenes\n  }\n}];"
+        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\n\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n} else if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) content = g1.choices[0].message.content;\n    else content = input.data;\n  } catch(e1) { content = input.data; }\n} else {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) content = g2.choices[0].message.content;\n      else content = rawStr;\n    } catch(e2) { content = rawStr; }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Keys: ' + Object.keys(input).join(', '));\n}\n\nvar clean = content.trim();\nif (clean.indexOf('```') >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry { parsed = JSON.parse(clean); }\ncatch(e3) { throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300)); }\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: sc.duration_seconds || 10\n  });\n}\n\nreturn [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];"
       },
       "id": "parse-story",
       "name": "Parse Story",
@@ -182,6 +182,71 @@
     },
     {
       "parameters": {
+        "jsCode": "var data = $('Parse Story').first().json;\nvar firstScene = data.scenes[0];\nvar prompt = firstScene.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, 5 seconds.';\n\nvar replicateBody = JSON.stringify({\n  input: {\n    prompt: prompt,\n    prompt_optimizer: true\n  }\n});\n\nreturn [{ json: { project_id: data.project_id, prompt: prompt, replicateBody: replicateBody } }];"
+      },
+      "id": "prepare-replicate",
+      "name": "Prepare Replicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.replicate.com/v1/models/minimax/video-01/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.replicateBody }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "create-prediction",
+      "name": "Create Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "var input = $input.first().json;\nvar projectId = $('Parse Story').first().json.project_id;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar parsed = null;\n\n// Case A: Directly parsed\nif (input.id && input.urls) {\n  parsed = input;\n}\n// Case B: String data\nelse if (typeof input.data === 'string') {\n  try { parsed = JSON.parse(input.data); } catch(e) {}\n}\n// Case C: Buffer\nif (!parsed) {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    try { parsed = JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {}\n  }\n}\n\nvar predictionUrl = '';\nvar predictionId = '';\n\nif (parsed && parsed.id) {\n  predictionId = parsed.id;\n  predictionUrl = (parsed.urls && parsed.urls.get) ? parsed.urls.get : ('https://api.replicate.com/v1/predictions/' + parsed.id);\n} else {\n  // Replicate call may have failed — use a dummy URL (will 404, handled gracefully)\n  predictionUrl = 'https://api.replicate.com/v1/predictions/none';\n}\n\nreturn [{ json: { predictionUrl: predictionUrl, predictionId: predictionId, project_id: projectId } }];"
+      },
+      "id": "extract-pred-url",
+      "name": "Extract Prediction URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        400
+      ]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
         "sendHeaders": true,
@@ -207,7 +272,7 @@
           "parameters": [
             {
               "name": "project_id",
-              "value": "={{ $('Parse Story').first().json.project_id }}"
+              "value": "={{ $json.project_id }}"
             },
             {
               "name": "step",
@@ -224,7 +289,52 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1680,
+        2400,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "id": "wait-3min",
+      "name": "Wait 3min",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Extract Prediction URL').first().json.predictionUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "poll-prediction",
+      "name": "Poll Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
         400
       ],
       "onError": "continueRegularOutput"
@@ -256,7 +366,7 @@
           "parameters": [
             {
               "name": "project_id",
-              "value": "={{ $('Parse Story').first().json.project_id }}"
+              "value": "={{ $('Extract Prediction URL').first().json.project_id }}"
             },
             {
               "name": "step",
@@ -273,10 +383,68 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1920,
+        3120,
         400
       ],
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-2min",
+      "name": "Wait 2min",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Extract Prediction URL').first().json.predictionUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "poll-prediction-final",
+      "name": "Poll Prediction Final",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parsePollResponse(input) {\n  if (!input) return null;\n  // Already parsed\n  if (input.status && (input.output || input.error)) return input;\n  // String data\n  if (typeof input.data === 'string') {\n    try { return JSON.parse(input.data); } catch(e) {}\n  }\n  // Buffer\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {}\n  }\n  return input;\n}\n\nvar videoUrl = 'https://demo-video-placeholder.example.com/video.mp4';\n\n// Try final poll first, then first poll\nvar sources = ['Poll Prediction Final', 'Poll Prediction'];\nfor (var i = 0; i < sources.length; i++) {\n  try {\n    var raw = $(sources[i]).first().json;\n    var poll = parsePollResponse(raw);\n    if (poll && poll.status === 'succeeded' && poll.output) {\n      var out = poll.output;\n      if (typeof out === 'string' && out.startsWith('http')) {\n        videoUrl = out;\n        break;\n      } else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') {\n        videoUrl = out[0];\n        break;\n      }\n    }\n  } catch(e) {}\n}\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: videoUrl,\n  story_text: storyData.story,\n  scenes_json: storyData.scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
+      },
+      "id": "prepare-callback",
+      "name": "Prepare Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        400
+      ]
     },
     {
       "parameters": {
@@ -305,7 +473,7 @@
           "parameters": [
             {
               "name": "project_id",
-              "value": "={{ $('Parse Story').first().json.project_id }}"
+              "value": "={{ $json.project_id }}"
             },
             {
               "name": "step",
@@ -322,23 +490,10 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2160,
+        4080,
         400
       ],
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "var data = $('Parse Story').first().json;\nvar callbackBody = JSON.stringify({\n  project_id: data.project_id,\n  video_url: 'https://demo-video-placeholder.example.com/video.mp4',\n  story_text: data.story,\n  scenes_json: data.scenes\n});\nreturn [{ json: { callbackBody: callbackBody, project_id: data.project_id } }];"
-      },
-      "id": "prepare-callback",
-      "name": "Prepare Callback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2400,
-        400
-      ]
     },
     {
       "parameters": {
@@ -374,7 +529,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2640,
+        4320,
         400
       ]
     }
@@ -439,6 +594,39 @@
       "main": [
         [
           {
+            "node": "Prepare Replicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Replicate": {
+      "main": [
+        [
+          {
+            "node": "Create Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Prediction": {
+      "main": [
+        [
+          {
+            "node": "Extract Prediction URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Prediction URL": {
+      "main": [
+        [
+          {
             "node": "Notify Step 3",
             "type": "main",
             "index": 0
@@ -447,6 +635,28 @@
       ]
     },
     "Notify Step 3": {
+      "main": [
+        [
+          {
+            "node": "Wait 3min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3min": {
+      "main": [
+        [
+          {
+            "node": "Poll Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Prediction": {
       "main": [
         [
           {
@@ -461,14 +671,25 @@
       "main": [
         [
           {
-            "node": "Notify Step 5",
+            "node": "Wait 2min",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Notify Step 5": {
+    "Wait 2min": {
+      "main": [
+        [
+          {
+            "node": "Poll Prediction Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Prediction Final": {
       "main": [
         [
           {
@@ -480,6 +701,17 @@
       ]
     },
     "Prepare Callback": {
+      "main": [
+        [
+          {
+            "node": "Notify Step 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Step 5": {
       "main": [
         [
           {

@@ -114,7 +114,7 @@ class VideoController extends Controller
         return view('video.result', compact('project'));
     }
 
-    public function download(int $id): Response
+    public function download(int $id)
     {
         $project = VideoProject::findOrFail($id);
 
@@ -133,6 +133,7 @@ class VideoController extends Controller
         $zip->addFromString('histoire_complete.txt', $story);
 
         $sep    = str_repeat('=', 64);
+        $sceneCount = count($scenes);
         $script = "SCRIPT COMPLET\n{$sep}\nThème : {$theme}\n{$sep}\n\n";
         foreach ($scenes as $s) {
             $n    = str_pad((string) ($s['scene_number'] ?? '?'), 2, '0', STR_PAD_LEFT);
@@ -141,7 +142,7 @@ class VideoController extends Controller
             $narr = $s['narration'] ?? '';
             $script .= "SCENE {$n} ({$dur}s)\n[Visuel]    {$vis}\n[Narration] {$narr}\n\n";
         }
-        $zip->addFromString('script_12_scenes.txt', $script);
+        $zip->addFromString("script_{$sceneCount}_scenes.txt", $script);
 
         foreach ($scenes as $s) {
             $n    = str_pad((string) ($s['scene_number'] ?? 0), 2, '0', STR_PAD_LEFT);
@@ -149,22 +150,28 @@ class VideoController extends Controller
             $zip->addFromString("scenes/scene_{$n}_narration.txt", $narr);
         }
 
-        $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
-        $zip->addFromString('video_sans_voix.url', "[InternetShortcut]\nURL={$videoUrl}\n");
-        $zip->addFromString('voix_off_complete.url', "[InternetShortcut]\nURL=(non disponible en mode demo)\n");
+        $hasVideo = $videoUrl
+            && !str_contains($videoUrl, 'placeholder')
+            && !str_contains($videoUrl, 'demo-mode')
+            && filter_var($videoUrl, FILTER_VALIDATE_URL);
+
+        if ($hasVideo) {
+            $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
+        }
 
         $readme = implode("\n", [
             'PACK COMPLET — AI Kids Video Generator',
             'Fait par Julien YILDIZ — rendu test de stage',
             str_repeat('=', 48),
             '',
+            "Thème : {$theme}",
+            "Nombre de scènes : {$sceneCount}",
+            '',
             'Contenu de cette archive :',
-            '  histoire_complete.txt      : L\'histoire narrative générée',
-            '  script_12_scenes.txt       : Script complet (visuel + narration par scène)',
-            '  scenes/scene_XX_narration  : Narration de chaque scène individuellement',
-            '  video_complete.url         : Lien vers la vidéo finale assemblée',
-            '  video_sans_voix.url        : Lien vers la vidéo sans voix off',
-            '  voix_off_complete.url      : Lien vers la piste audio de narration',
+            '  histoire_complete.txt             : L\'histoire narrative générée par IA',
+            "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration par scène)",
+            '  scenes/scene_XX_narration.txt     : Narration de chaque scène individuellement',
+            $hasVideo ? '  video_complete.url                : Lien vers la vidéo finale' : '',
         ]);
         $zip->addFromString('README.txt', $readme);
 

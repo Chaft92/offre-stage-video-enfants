@@ -1,11 +1,12 @@
-"""Quick test: verifies the ZIP endpoint and branding changes work correctly."""
+##FICHIER POUR TESTER LA GENERATION VIDEO, L'EXPORT EN .ZIP, ET LE RENDERING DES PAGES INDEX ET RESULT AVEC LES BONNES DONNEES. 
+##A LANCER EN LOCAL, PAS DANS LE WORKFLOW !! 
+
 import sys
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
 
 from dev_server import generate_zip, render_index, render_result, MOCK_SCENES, MOCK_STORY, MOCK_VIDEO_URL
 import zipfile, io
 
-# Build a fake project
 project = {
     "id": 99,
     "theme": "Un dragon qui vole",
@@ -17,7 +18,6 @@ project = {
     "error_message": None,
 }
 
-# --- Test ZIP generation ---
 zip_bytes = generate_zip(project)
 assert len(zip_bytes) > 500, "ZIP too small"
 with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
@@ -36,13 +36,11 @@ with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
     assert MOCK_VIDEO_URL in url_content, "Video URL missing from .url file"
 print("ZIP OK — files:", names)
 
-# --- Test branding in index page ---
 idx = render_index()
 assert "Julien YILDIZ" in idx, "Branding missing from index"
 assert "Claude" not in idx or "AI Kids" in idx, "Old branding leak"
 print("Index branding OK")
 
-# --- Test branding + download link in result page ---
 result = render_result(project)
 assert "Julien YILDIZ" in result, "Branding missing from result"
 assert "/video/99/download" in result, "Download link missing"

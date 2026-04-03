@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Downloads and configures portable PHP 8.3 + Composer for Windows.
 Installs to %LOCALAPPDATA%\php83 — no admin required.
