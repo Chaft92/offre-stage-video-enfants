@@ -6,7 +6,6 @@ use App\Models\VideoProject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
 
 class N8NCallbackController extends Controller
 {
@@ -79,45 +78,42 @@ class N8NCallbackController extends Controller
     {
         $data = $request->validate([
             'project_id'  => ['required', 'integer', 'exists:video_projects,id'],
-            'scenes_b64'  => ['required', 'string'],
-            'output_path' => ['required', 'string', 'max:500'],
+            'scenes_b64'  => ['nullable', 'string'],
+            'output_path' => ['nullable', 'string', 'max:500'],
             'story'       => ['nullable', 'string', 'max:50000'],
             'all_scenes'  => ['nullable', 'array'],
         ]);
 
         $project = VideoProject::findOrFail($data['project_id']);
 
-        // Validate base64 and decode scenes for basic sanity
-        $decoded = base64_decode($data['scenes_b64'], strict: true);
-        if ($decoded === false) {
-            return response()->json(['error' => 'Invalid scenes_b64 encoding.'], 422);
+        // In demo mode, just mark project as done with the available data
+        $scenes = [];
+        if (!empty($data['scenes_b64'])) {
+            $decoded = base64_decode($data['scenes_b64'], strict: true);
+            if ($decoded !== false) {
+                $scenes = json_decode($decoded, true) ?: [];
+            }
+        } elseif (!empty($data['all_scenes'])) {
+            $scenes = $data['all_scenes'];
         }
 
-        $scriptPath = base_path('scripts/assemble_video.py');
-        $outputPath = $data['output_path'];
-
-        // Only allow output paths inside storage/
-        $storagePath = storage_path();
-        $resolved    = realpath(dirname($outputPath));
-        if ($resolved === false || !str_starts_with($resolved, $storagePath)) {
-            return response()->json(['error' => 'Invalid output path.'], 422);
+        $videoUrl = '';
+        foreach ($scenes as $s) {
+            if (!empty($s['video_url'])) {
+                $videoUrl = $s['video_url'];
+                break;
+            }
         }
 
-        $result = Process::timeout(300)->run([
-            'python3', $scriptPath,
-            '--scenes-b64', $data['scenes_b64'],
-            '--output', $outputPath,
+        $project->update([
+            'status'       => 'done',
+            'current_step' => 5,
+            'video_url'    => $videoUrl ?: 'demo-mode',
+            'story_text'   => $data['story'] ?? '',
+            'scenes_json'  => $scenes,
         ]);
 
-        if ($result->failed()) {
-            $err = trim($result->errorOutput() ?: $result->output());
-            Log::error("Assemble failed for project #{$project->id}", ['stderr' => $err]);
-            return response()->json(['error' => 'FFmpeg assembly failed: ' . $err], 500);
-        }
-
-        $videoUrl = '/storage/videos/' . $project->id . '.mp4';
-
-        Log::info("Assemble OK for project #{$project->id}", ['video_url' => $videoUrl]);
+        Log::info("Assemble (demo) OK for project #{$project->id}", ['video_url' => $videoUrl]);
 
         return response()->json(['success' => true, 'video_url' => $videoUrl]);
     }
