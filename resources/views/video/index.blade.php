@@ -197,7 +197,7 @@
                         </div>
                         <div class="pt-2 pb-6">
                             <p class="text-white font-medium">Génération de l'histoire</p>
-                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) analyse votre thème et écrit une histoire en 3 scènes</p>
+                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) écrit un script de 400-500 mots découpé en 12 scènes</p>
                         </div>
                     </div>
 
@@ -215,8 +215,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Découpage en 3 scènes</p>
-                            <p class="text-gray-400 text-sm mt-1">L'histoire est découpée en scènes avec descriptions visuelles</p>
+                            <p class="text-white font-medium">Découpage en 12 scènes</p>
+                            <p class="text-gray-400 text-sm mt-1">Chaque scène reçoit une description visuelle et une narration</p>
                         </div>
                     </div>
 
@@ -234,8 +234,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération vidéo (Replicate)</p>
-                            <p class="text-gray-400 text-sm mt-1">3 clips vidéo générés par minimax/video-01 (~4 min d'attente)</p>
+                            <p class="text-white font-medium">Génération des 12 vidéos</p>
+                            <p class="text-gray-400 text-sm mt-1">12 clips vidéo générés par minimax/video-01 (~5 min d'attente)</p>
                         </div>
                     </div>
 
@@ -253,8 +253,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Vérification de la vidéo</p>
-                            <p class="text-gray-400 text-sm mt-1">Vérification du rendu vidéo en cours (~2 min d'attente)</p>
+                            <p class="text-white font-medium">Vérification des vidéos</p>
+                            <p class="text-gray-400 text-sm mt-1">Vérification du rendu des 12 clips (~3 min d'attente)</p>
                         </div>
                     </div>
 
@@ -272,7 +272,7 @@
                         </div>
                         <div class="pt-2">
                             <p class="text-white font-medium">Assemblage final</p>
-                            <p class="text-gray-400 text-sm mt-1">Récupération de la vidéo et envoi du résultat</p>
+                            <p class="text-gray-400 text-sm mt-1">Assemblage des 12 scènes + voix ElevenLabs et envoi du résultat</p>
                         </div>
                     </div>
                 </div>
@@ -420,10 +420,10 @@
             const stepMessages = [
                 'Initialisation du pipeline…',
                 'L\'IA génère l\'histoire…',
-                'Découpage en 3 scènes terminé…',
-                'Génération vidéo en cours (~3 min d\'attente)…',
-                'Vérification du rendu vidéo (~2 min)…',
-                'Assemblage final en cours…',
+                'Découpage en 12 scènes terminé…',
+                'Génération des 12 vidéos en cours (~5 min d\'attente)…',
+                'Vérification des rendus vidéo (~3 min)…',
+                'Assemblage final + voix ElevenLabs…',
             ];
 
             const msgEl = document.getElementById('status-message');

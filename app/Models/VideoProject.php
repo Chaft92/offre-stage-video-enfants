@@ -52,11 +52,11 @@ class VideoProject extends Model
     public function stepLabel(): string
     {
         return match ($this->current_step) {
-            1       => "Génération de l'histoire",
-            2       => 'Découpage en scènes',
-            3       => 'Voix off (ElevenLabs)',
-            4       => 'Clips vidéo (Runway ML)',
-            5       => 'Assemblage final (FFmpeg)',
+            1       => "Génération de l'histoire (Groq)",
+            2       => 'Découpage en 12 scènes',
+            3       => 'Génération des 12 vidéos (Replicate)',
+            4       => 'Vérification des vidéos',
+            5       => 'Assemblage final + voix ElevenLabs',
             default => 'En attente de démarrage',
         };
     }

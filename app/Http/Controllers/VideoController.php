@@ -187,4 +187,78 @@ class VideoController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ])->deleteFileAfterSend();
     }
+
+    /**
+     * ElevenLabs TTS proxy — generates audio for a given scene's narration.
+     * Caches in storage/app/tts/ to avoid re-calling the API on page refresh.
+     */
+    public function tts(int $id, int $sceneNumber)
+    {
+        $project = VideoProject::findOrFail($id);
+        abort_unless($project->isDone(), 404, 'Projet non disponible.');
+
+        $scenes = $project->scenes_json ?? [];
+        $scene  = collect($scenes)->firstWhere('scene_number', $sceneNumber);
+
+        if (!$scene || empty($scene['narration'])) {
+            abort(404, 'Scène introuvable.');
+        }
+
+        $cacheDir  = storage_path('app/tts');
+        $cacheFile = "{$cacheDir}/tts_{$id}_{$sceneNumber}.mp3";
+
+        if (file_exists($cacheFile)) {
+            return response()->file($cacheFile, [
+                'Content-Type'  => 'audio/mpeg',
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
+        }
+
+        $apiKey  = config('services.elevenlabs.api_key');
+        $voiceId = config('services.elevenlabs.voice_id', 'EXAVITQu4vr4xnSDxMaL');
+
+        if (empty($apiKey)) {
+            abort(503, 'ElevenLabs API key not configured.');
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'xi-api-key'   => $apiKey,
+                'Content-Type' => 'application/json',
+                'Accept'       => 'audio/mpeg',
+            ])
+            ->timeout(30)
+            ->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}", [
+                'text'     => $scene['narration'],
+                'model_id' => 'eleven_multilingual_v2',
+                'voice_settings' => [
+                    'stability'        => 0.5,
+                    'similarity_boost' => 0.75,
+                    'style'            => 0.3,
+                ],
+            ]);
+
+            if ($response->failed()) {
+                Log::error('ElevenLabs TTS failed', [
+                    'status' => $response->status(),
+                    'body'   => substr($response->body(), 0, 500),
+                ]);
+                abort(502, 'ElevenLabs API error.');
+            }
+
+            if (!is_dir($cacheDir)) {
+                mkdir($cacheDir, 0755, true);
+            }
+            file_put_contents($cacheFile, $response->body());
+
+            return response($response->body(), 200, [
+                'Content-Type'  => 'audio/mpeg',
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('ElevenLabs TTS exception', ['error' => $e->getMessage()]);
+            abort(502, 'ElevenLabs service unavailable.');
+        }
+    }
 }

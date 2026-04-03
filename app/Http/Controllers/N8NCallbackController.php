@@ -15,7 +15,7 @@ class N8NCallbackController extends Controller
             'project_id'                       => ['required', 'integer', 'exists:video_projects,id'],
             'video_url'                        => ['required', 'string', 'max:1000'],
             'story_text'                       => ['required', 'string', 'max:50000'],
-            'scenes_json'                      => ['required', 'array', 'min:1', 'max:20'],
+            'scenes_json'                      => ['required', 'array', 'min:1', 'max:25'],
             'scenes_json.*.scene_number'       => ['required', 'integer', 'min:1'],
             'scenes_json.*.narration'          => ['required', 'string'],
             'scenes_json.*.visual_description' => ['required', 'string'],
