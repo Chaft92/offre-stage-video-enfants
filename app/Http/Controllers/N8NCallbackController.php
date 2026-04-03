@@ -121,3 +121,4 @@ class N8NCallbackController extends Controller
 
         return response()->json(['success' => true, 'video_url' => $videoUrl]);
     }
+}
