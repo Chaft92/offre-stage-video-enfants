@@ -1,9 +1,12 @@
 # Railway.app — build + deploy config for Laravel 11
-# Nixpacks auto-detects PHP 8.2 from composer.json ("php": "^8.2")
-# and installs Composer + required extensions automatically.
+# Nixpacks auto-detects PHP 8.2 from composer.json
 
 [phases.install]
-cmds = ["composer install --optimize-autoloader --no-dev --no-interaction"]
+cmds = [
+    "mkdir -p bootstrap/cache storage/framework/{cache,sessions,views,testing} storage/logs storage/app/public",
+    "chmod -R 775 bootstrap/cache storage",
+    "composer install --optimize-autoloader --no-dev --no-interaction"
+]
 
 [phases.build]
 cmds = [
