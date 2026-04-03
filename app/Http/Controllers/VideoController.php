@@ -44,8 +44,8 @@ class VideoController extends Controller
                 'Content-Type' => 'application/json',
                 'X-N8N-Secret' => config('services.n8n.secret', ''),
             ])
-            ->timeout(15)
-            ->retry(2, 500)
+            ->timeout(120)
+            ->retry(2, 1000)
             ->post($webhookUrl, [
                 'project_id'   => $project->id,
                 'theme'        => $project->theme,
