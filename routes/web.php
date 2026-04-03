@@ -21,5 +21,3 @@ Route::get('/video/{id}', [VideoController::class, 'show'])->name('video.show');
 Route::get('/video/{id}/download', [VideoController::class, 'download'])->name('video.download');
 
 Route::get('/video/{id}/tts/{sceneNumber}', [VideoController::class, 'tts'])->name('video.tts');
-
-Route::get('/video/{id}/check-videos', [VideoController::class, 'checkVideos'])->name('video.check-videos');

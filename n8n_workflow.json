@@ -1,5 +1,5 @@
 {
-  "name": "AI Kids Video Generator v10",
+  "name": "AI Kids Video Generator v11",
   "nodes": [
     {
       "parameters": {
@@ -69,7 +69,7 @@
     },
     {
       "parameters": {
-        "jsCode": "var webhookData = $('Webhook Trigger').first().json.body;\nvar theme = webhookData.theme;\nvar project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme from webhook');\n}\n\nvar groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 8192,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un auteur professionnel de videos educatives pour enfants de 6 a 10 ans. Tu ecris des scripts video de 400 a 500 mots. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown. Pas de code fences.'\n    },\n    {\n      role: 'user',\n      content: 'Ecris un script video educatif pour enfants sur le theme : \"' + theme + '\".\\n\\nRegles strictes :\\n- Le script complet (somme de toutes les narrations) doit faire entre 400 et 500 mots\\n- Decoupe en exactement 12 scenes\\n- Chaque scene dure entre 5 et 20 secondes\\n- Les descriptions visuelles sont en ANGLAIS (pour le generateur video)\\n- Les narrations sont en FRANCAIS (pour les enfants)\\n- Chaque description visuelle commence par \"A colorful cartoon\" ou \"A bright animated\" ou similaire\\n- La duree totale des scenes doit etre entre 120 et 180 secondes\\n\\nReponds avec ce JSON exact :\\n{\\n  \"story\": \"resume complet de l histoire en francais (50-80 mots)\",\\n  \"moral\": \"la morale de l histoire\",\\n  \"scenes\": [\\n    { \"scene_number\": 1, \"visual_description\": \"A colorful cartoon ...\", \"narration\": \"texte narration francais 30-45 mots\", \"duration_seconds\": 12 },\\n    ... (12 scenes au total)\\n  ]\\n}'\n    }\n  ]\n};\n\nreturn [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];"
+        "jsCode": "var webhookData = $('Webhook Trigger').first().json.body;\nvar theme = webhookData.theme;\nvar project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme from webhook');\n}\n\nvar groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 4096,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un scenariste professionnel de videos educatives pour enfants (6-10 ans). Tu reponds UNIQUEMENT en JSON valide. Pas de markdown.'\n    },\n    {\n      role: 'user',\n      content: 'Cree un script video educatif pour enfants sur : \"' + theme + '\".\\n\\nStructure obligatoire :\\n- Introduction (2-3 scenes) : presenter le theme et le personnage principal\\n- Developpement (5-8 scenes) : raconter l histoire avec des moments educatifs\\n- Conclusion (2-3 scenes) : resolution et morale\\n\\nRegles :\\n- Entre 10 et 15 scenes au total\\n- Chaque scene : 8-15 secondes (total 120-180s)\\n- Descriptions visuelles en ANGLAIS (pour generateur image), commencant par \"A colorful cartoon\"\\n- Narrations en FRANCAIS, 20-35 mots par scene\\n- Chaque scene a un champ \"voice\" parmi : \"narratrice\" (voix feminine douce), \"narrateur\" (voix masculine chaleureuse), \"enfant_fille\" (voix jeune fille), \"enfant_garcon\" (voix jeune garcon)\\n- Choisis la voix adaptee au contexte de chaque scene\\n\\nJSON exact :\\n{\\n  \"story\": \"resume 50-80 mots en francais\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"part\": \"introduction\",\\n      \"visual_description\": \"A colorful cartoon of ...\",\\n      \"narration\": \"texte francais\",\\n      \"duration_seconds\": 10,\\n      \"voice\": \"narratrice\"\\n    }\\n  ]\\n}'\n    }\n  ]\n};\n\nreturn [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];"
       },
       "id": "build-groq",
       "name": "Build Groq Request",
@@ -102,7 +102,12 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify($json.groqBody) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 60000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 3,
+            "retryInterval": 20000
+          }
         }
       },
       "id": "call-groq",
@@ -112,11 +117,14 @@
       "position": [
         920,
         400
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 20000
     },
     {
       "parameters": {
-        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n} else if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) content = g1.choices[0].message.content;\n    else content = input.data;\n  } catch(e1) { content = input.data; }\n} else {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) content = g2.choices[0].message.content;\n      else content = rawStr;\n    } catch(e2) { content = rawStr; }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Keys: ' + Object.keys(input).join(', '));\n}\n\nvar clean = content.trim();\nvar fenceIdx = clean.indexOf('```');\nif (fenceIdx >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry { parsed = JSON.parse(clean); }\ncatch(e3) { throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300)); }\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10))\n  });\n}\n\nreturn [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];"
+        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n} else if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) content = g1.choices[0].message.content;\n    else content = input.data;\n  } catch(e1) { content = input.data; }\n} else {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) content = g2.choices[0].message.content;\n      else content = rawStr;\n    } catch(e2) { content = rawStr; }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Keys: ' + Object.keys(input).join(', '));\n}\n\nvar clean = content.trim();\nvar fenceIdx = clean.indexOf('```');\nif (fenceIdx >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry { parsed = JSON.parse(clean); }\ncatch(e3) { throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300)); }\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    part: sc.part || 'development',\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10)),\n    voice: sc.voice || 'narratrice'\n  });\n}\n\nreturn [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];"
       },
       "id": "parse-story",
       "name": "Parse Story",
@@ -178,7 +186,7 @@
     },
     {
       "parameters": {
-        "jsCode": "var storyData = $('Parse Story').first().json;\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    video_url: ''\n  });\n}\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: 'pending',\n  story_text: storyData.story,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
+        "jsCode": "var storyData = $('Parse Story').first().json;\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    part: sc.part,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    voice: sc.voice,\n    video_url: ''\n  });\n}\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: 'pending',\n  story_text: storyData.story,\n  moral: storyData.moral,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
       },
       "id": "prepare-callback",
       "name": "Prepare Callback",
@@ -215,7 +223,7 @@
         "rawContentType": "application/json",
         "body": "={{ $json.callbackBody }}",
         "options": {
-          "timeout": 120000
+          "timeout": 30000
         }
       },
       "id": "send-callback",

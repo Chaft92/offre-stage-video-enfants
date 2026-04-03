@@ -1,6 +1,6 @@
 // Script to generate the n8n workflow JSON
 // Run: node _generate_workflow.js
-// v10 — Simplified: N8N does Groq story only, Laravel handles Replicate + ElevenLabs
+// v11 — Groq with retry, Pollinations.ai images, dynamic voices, cinema player
 
 // ─── Code: Build Groq Request ───
 const buildGroqCode = `
@@ -14,17 +14,17 @@ if (!project_id || !theme) {
 
 var groqBody = {
   model: 'llama-3.3-70b-versatile',
-  max_tokens: 8192,
+  max_tokens: 4096,
   temperature: 0.7,
   response_format: { type: 'json_object' },
   messages: [
     {
       role: 'system',
-      content: 'Tu es un auteur professionnel de videos educatives pour enfants de 6 a 10 ans. Tu ecris des scripts video de 400 a 500 mots. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown. Pas de code fences.'
+      content: 'Tu es un scenariste professionnel de videos educatives pour enfants (6-10 ans). Tu reponds UNIQUEMENT en JSON valide. Pas de markdown.'
     },
     {
       role: 'user',
-      content: 'Ecris un script video educatif pour enfants sur le theme : "' + theme + '".\\n\\nRegles strictes :\\n- Le script complet (somme de toutes les narrations) doit faire entre 400 et 500 mots\\n- Decoupe en exactement 12 scenes\\n- Chaque scene dure entre 5 et 20 secondes\\n- Les descriptions visuelles sont en ANGLAIS (pour le generateur video)\\n- Les narrations sont en FRANCAIS (pour les enfants)\\n- Chaque description visuelle commence par "A colorful cartoon" ou "A bright animated" ou similaire\\n- La duree totale des scenes doit etre entre 120 et 180 secondes\\n\\nReponds avec ce JSON exact :\\n{\\n  "story": "resume complet de l histoire en francais (50-80 mots)",\\n  "moral": "la morale de l histoire",\\n  "scenes": [\\n    { "scene_number": 1, "visual_description": "A colorful cartoon ...", "narration": "texte narration francais 30-45 mots", "duration_seconds": 12 },\\n    ... (12 scenes au total)\\n  ]\\n}'
+      content: 'Cree un script video educatif pour enfants sur : "' + theme + '".\\n\\nStructure obligatoire :\\n- Introduction (2-3 scenes) : presenter le theme et le personnage principal\\n- Developpement (5-8 scenes) : raconter l histoire avec des moments educatifs\\n- Conclusion (2-3 scenes) : resolution et morale\\n\\nRegles :\\n- Entre 10 et 15 scenes au total\\n- Chaque scene : 8-15 secondes (total 120-180s)\\n- Descriptions visuelles en ANGLAIS (pour generateur image), commencant par "A colorful cartoon"\\n- Narrations en FRANCAIS, 20-35 mots par scene\\n- Chaque scene a un champ "voice" parmi : "narratrice" (voix feminine douce), "narrateur" (voix masculine chaleureuse), "enfant_fille" (voix jeune fille), "enfant_garcon" (voix jeune garcon)\\n- Choisis la voix adaptee au contexte de chaque scene\\n\\nJSON exact :\\n{\\n  "story": "resume 50-80 mots en francais",\\n  "moral": "la morale",\\n  "scenes": [\\n    {\\n      "scene_number": 1,\\n      "part": "introduction",\\n      "visual_description": "A colorful cartoon of ...",\\n      "narration": "texte francais",\\n      "duration_seconds": 10,\\n      "voice": "narratrice"\\n    }\\n  ]\\n}'
     }
   ]
 };
@@ -32,7 +32,7 @@ var groqBody = {
 return [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];
 `.trim();
 
-// ─── Code: Parse Story (handles Buffer responses) ───
+// ─── Code: Parse Story (handles Buffer) ───
 const parseStoryCode = `
 var project_id = $('Build Groq Request').first().json.project_id;
 var theme = $('Build Groq Request').first().json.theme;
@@ -96,16 +96,18 @@ for (var s = 0; s < parsed.scenes.length; s++) {
   var sc = parsed.scenes[s];
   scenes.push({
     scene_number: sc.scene_number || (s + 1),
+    part: sc.part || 'development',
     visual_description: sc.visual_description || 'A colorful cartoon scene',
     narration: sc.narration || '',
-    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10))
+    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10)),
+    voice: sc.voice || 'narratrice'
   });
 }
 
 return [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];
 `.trim();
 
-// ─── Code: Prepare Callback (format scenes for Laravel — no video URLs) ───
+// ─── Code: Prepare Callback ───
 const prepareCallbackCode = `
 var storyData = $('Parse Story').first().json;
 
@@ -114,9 +116,11 @@ for (var s = 0; s < storyData.scenes.length; s++) {
   var sc = storyData.scenes[s];
   scenes.push({
     scene_number: sc.scene_number,
+    part: sc.part,
     visual_description: sc.visual_description,
     narration: sc.narration,
     duration_seconds: sc.duration_seconds,
+    voice: sc.voice,
     video_url: ''
   });
 }
@@ -125,6 +129,7 @@ var callbackBody = JSON.stringify({
   project_id: storyData.project_id,
   video_url: 'pending',
   story_text: storyData.story,
+  moral: storyData.moral,
   scenes_json: scenes
 });
 
@@ -166,7 +171,7 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
 
 // ─── Build the workflow ───
 const workflow = {
-  name: "AI Kids Video Generator v10",
+  name: "AI Kids Video Generator v11",
   nodes: [
     // 1. Webhook Trigger
     {
@@ -184,10 +189,10 @@ const workflow = {
       webhookId: "video-pipeline"
     },
 
-    // 2. Notify Step 1 (story generation starting)
+    // 2. Notify Step 1
     makeNotifyNode("step1", "Notify Step 1", 1, [480, 400], "={{ $json.body.project_id }}"),
 
-    // 3. Build Groq Request (Code)
+    // 3. Build Groq Request
     {
       parameters: { jsCode: buildGroqCode },
       id: "build-groq",
@@ -197,7 +202,7 @@ const workflow = {
       position: [700, 400]
     },
 
-    // 4. Call Groq API (HTTP Request)
+    // 4. Call Groq API (with retry for rate limits)
     {
       parameters: {
         method: "POST",
@@ -213,16 +218,26 @@ const workflow = {
         contentType: "raw",
         rawContentType: "application/json",
         body: "={{ JSON.stringify($json.groqBody) }}",
-        options: { timeout: 60000 }
+        options: {
+          timeout: 60000,
+          retry: {
+            enabled: true,
+            maxRetries: 3,
+            retryInterval: 20000
+          }
+        }
       },
       id: "call-groq",
       name: "Call Groq API",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [920, 400]
+      position: [920, 400],
+      retryOnFail: true,
+      maxTries: 3,
+      waitBetweenTries: 20000
     },
 
-    // 5. Parse Story (Code)
+    // 5. Parse Story
     {
       parameters: { jsCode: parseStoryCode },
       id: "parse-story",
@@ -232,10 +247,10 @@ const workflow = {
       position: [1140, 400]
     },
 
-    // 6. Notify Step 2 (scenes ready)
+    // 6. Notify Step 2
     makeNotifyNode("step2", "Notify Step 2", 2, [1360, 400], "={{ $json.project_id }}"),
 
-    // 7. Prepare Callback (Code — format data for Laravel)
+    // 7. Prepare Callback
     {
       parameters: { jsCode: prepareCallbackCode },
       id: "prepare-callback",
@@ -262,7 +277,7 @@ const workflow = {
         contentType: "raw",
         rawContentType: "application/json",
         body: "={{ $json.callbackBody }}",
-        options: { timeout: 120000 }
+        options: { timeout: 30000 }
       },
       id: "send-callback",
       name: "Send Callback",
@@ -290,10 +305,10 @@ require('fs').writeFileSync(
   'utf-8'
 );
 
-console.log('Workflow v10 generated successfully!');
+console.log('Workflow v11 generated!');
 console.log('Nodes:', workflow.nodes.length);
-console.log('Flow: Webhook → Groq → Parse → Callback (Laravel handles Replicate)');
+console.log('Features: Groq with retry (3x, 20s delay), dynamic voices, Pollinations images');
 Object.keys(workflow.connections).forEach(k => {
   const targets = workflow.connections[k].main[0].map(c => c.node);
-  console.log(' ', k, '→', targets.join(', '));
+  console.log(' ', k, '->', targets.join(', '));
 });

@@ -106,7 +106,7 @@
                     Video Generator
                 </span>
             </h1>
-            <p class="text-gray-400 text-lg">Transformez un thème en vidéo animée pour enfants en quelques minutes</p>
+            <p class="text-gray-400 text-lg">Transformez un thème en film animé illustré pour enfants avec narration IA</p>
         </div>
 
         @if(session('info'))
@@ -159,7 +159,7 @@
                                   d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </span>
-                    <span id="btn-text">Générer la vidéo</span>
+                    <span id="btn-text">Générer le film</span>
                 </button>
             </form>
         </div>
@@ -197,7 +197,7 @@
                         </div>
                         <div class="pt-2 pb-6">
                             <p class="text-white font-medium">Génération de l'histoire</p>
-                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) écrit un script de 400-500 mots découpé en 12 scènes</p>
+                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) écrit un script complet avec introduction, développement et conclusion</p>
                         </div>
                     </div>
 
@@ -215,8 +215,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Découpage en 12 scènes</p>
-                            <p class="text-gray-400 text-sm mt-1">Chaque scène reçoit une description visuelle et une narration</p>
+                            <p class="text-white font-medium">Création des scènes illustrées</p>
+                            <p class="text-gray-400 text-sm mt-1">10 à 15 scènes avec descriptions visuelles et narration en français</p>
                         </div>
                     </div>
 
@@ -234,8 +234,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération des 12 vidéos</p>
-                            <p class="text-gray-400 text-sm mt-1">12 clips vidéo générés par minimax/video-01 (~5 min d'attente)</p>
+                            <p class="text-white font-medium">Génération des illustrations</p>
+                            <p class="text-gray-400 text-sm mt-1">Images générées par Pollinations.ai (FLUX) pour chaque scène</p>
                         </div>
                     </div>
 
@@ -253,8 +253,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Vérification des vidéos</p>
-                            <p class="text-gray-400 text-sm mt-1">Vérification du rendu des 12 clips (~3 min d'attente)</p>
+                            <p class="text-white font-medium">Synthèse vocale</p>
+                            <p class="text-gray-400 text-sm mt-1">Voix dynamiques ElevenLabs adaptées au contexte de chaque scène</p>
                         </div>
                     </div>
 
@@ -271,8 +271,8 @@
                             </div>
                         </div>
                         <div class="pt-2">
-                            <p class="text-white font-medium">Assemblage final</p>
-                            <p class="text-gray-400 text-sm mt-1">Assemblage des 12 scènes + voix ElevenLabs et envoi du résultat</p>
+                            <p class="text-white font-medium">Film animé prêt !</p>
+                            <p class="text-gray-400 text-sm mt-1">Assemblage de toutes les scènes en un film interactif avec narration</p>
                         </div>
                     </div>
                 </div>
@@ -366,7 +366,7 @@
                 errDiv.textContent = err.message;
                 errDiv.classList.remove('hidden');
                 btn.disabled        = false;
-                btnText.textContent = 'Générer la vidéo';
+                btnText.textContent = 'Générer le film';
             }
         });
 
@@ -420,16 +420,16 @@
             const stepMessages = [
                 'Initialisation du pipeline…',
                 'L\'IA génère l\'histoire…',
-                'Découpage en 12 scènes terminé…',
-                'Génération des 12 vidéos en cours (~5 min d\'attente)…',
-                'Vérification des rendus vidéo (~3 min)…',
-                'Assemblage final + voix ElevenLabs…',
+                'Création des scènes illustrées…',
+                'Génération des illustrations (Pollinations.ai)…',
+                'Synthèse vocale (ElevenLabs)…',
+                'Film animé prêt ! Redirection…',
             ];
 
             const msgEl = document.getElementById('status-message');
             if (msgEl) {
                 msgEl.textContent = status === 'done'
-                    ? '✅ Vidéo générée ! Redirection…'
+                    ? '✅ Film prêt ! Redirection…'
                     : status === 'error'
                     ? '❌ Erreur dans le pipeline.'
                     : (stepMessages[currentStep] ?? stepMessages[0]);

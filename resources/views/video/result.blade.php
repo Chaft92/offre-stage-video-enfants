@@ -9,17 +9,9 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         * { font-family: 'Inter', sans-serif; }
 
-        .gradient-bg {
-            background-image: url('/images/desk-bg.svg');
-            background-size: cover;
-            background-position: center;
-        }
-        .gradient-bg::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: rgba(8, 6, 25, 0.72);
-            z-index: 1;
+        body {
+            background: #0a0618;
+            color: #e5e7eb;
         }
         .card-glass {
             background: rgba(255, 255, 255, 0.05);
@@ -35,48 +27,137 @@
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         }
 
-        .scene-card {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
+        /* Cinema player */
+        .cinema-container {
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .cinema-screen {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #111;
+            overflow: hidden;
+        }
+        .cinema-screen img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.8s ease-in-out;
+        }
+        .cinema-screen img.hidden-img { opacity: 0; }
+        .cinema-screen img.active-img { opacity: 1; }
+
+        /* Ken Burns zoom effect */
+        @keyframes kenburns {
+            0% { transform: scale(1) translate(0, 0); }
+            100% { transform: scale(1.08) translate(-1%, -1%); }
+        }
+        .cinema-screen img.active-img {
+            animation: kenburns 15s ease-in-out forwards;
+        }
+
+        .cinema-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.85));
+            padding: 2rem 1.5rem 1.5rem;
+        }
+        .cinema-controls {
+            background: rgba(20, 10, 40, 0.95);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #a855f7);
+            border-radius: 3px;
+            transition: width 0.3s linear;
+        }
+        .ctrl-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: background 0.2s;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.2); }
+        .ctrl-btn.active { background: rgba(167, 139, 250, 0.4); }
+
+        .voice-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 10px;
             border-radius: 12px;
-            transition: transform 0.2s ease, border-color 0.2s ease;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(167, 139, 250, 0.2);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #c4b5fd;
         }
-        .scene-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(167, 139, 250, 0.35);
+
+        .scene-badge-part {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 4px;
         }
-        .scene-card.active-scene {
-            border-color: rgba(167, 139, 250, 0.6);
-            box-shadow: 0 0 20px rgba(167, 139, 250, 0.15);
+        .part-introduction { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+        .part-development { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+        .part-conclusion { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+
+        .scene-thumb {
+            width: 80px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.2s;
         }
-        .scene-badge {
-            background: linear-gradient(135deg, #667eea33, #764ba233);
-            border: 1px solid rgba(167,139,250,0.3);
-        }
+        .scene-thumb:hover { transform: scale(1.05); }
+        .scene-thumb.active-thumb { border-color: #a855f7; }
+
         .story-block {
             background: rgba(255,255,255,0.03);
             border-left: 3px solid #7c3aed;
             line-height: 1.85;
         }
 
-        .audio-controls {
-            background: rgba(167, 139, 250, 0.08);
-            border: 1px solid rgba(167, 139, 250, 0.2);
-            border-radius: 10px;
+        .scene-list-item {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            transition: border-color 0.2s;
         }
-
-        .play-all-btn {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            transition: all 0.3s ease;
-        }
-        .play-all-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(245, 158, 11, 0.35);
-        }
-        .play-all-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
+        .scene-list-item:hover, .scene-list-item.active-scene {
+            border-color: rgba(167, 139, 250, 0.4);
         }
 
         @keyframes fade-in-up {
@@ -90,205 +171,140 @@
         ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 3px; }
     </style>
 </head>
-<body class="gradient-bg min-h-screen py-10 px-4 relative overflow-x-hidden">
+<body class="min-h-screen py-8 px-4">
 
-    <div class="max-w-4xl mx-auto relative z-10">
+    <div class="max-w-5xl mx-auto">
 
-        <div class="text-center mb-8 fade-in-up">
-            <span class="inline-block text-5xl mb-3">🎉</span>
-            <h1 class="text-3xl font-extrabold text-white mb-2">Votre vidéo est prête !</h1>
-            <p class="text-gray-400">
-                « <span class="text-purple-300 font-medium">{{ $project->theme }}</span> »
+        {{-- Header --}}
+        <div class="text-center mb-6 fade-in-up">
+            <h1 class="text-3xl font-extrabold text-white mb-2">{{ $project->theme }}</h1>
+            <p class="text-gray-400 text-sm">
+                {{ $project->getSceneCount() }} scènes &middot; {{ $project->getTotalDuration() }}s &middot; Projet #{{ $project->id }}
             </p>
         </div>
 
-        <div class="grid grid-cols-3 gap-4 mb-8 fade-in-up" style="animation-delay:0.05s">
-            <div class="card-glass rounded-xl p-4 text-center">
-                <p class="text-2xl font-extrabold text-white">{{ $project->getSceneCount() }}</p>
-                <p class="text-gray-400 text-xs mt-1 uppercase tracking-wider">Scènes</p>
+        @php
+            $scenes = $project->scenes_json ?? [];
+            $voiceLabels = [
+                'narratrice' => 'Narratrice',
+                'narrateur' => 'Narrateur',
+                'enfant_fille' => 'Enfant (fille)',
+                'enfant_garcon' => 'Enfant (garçon)',
+            ];
+        @endphp
+
+        {{-- Cinema Player --}}
+        @if(count($scenes) > 0)
+        <div class="cinema-container mb-6 fade-in-up" style="animation-delay:0.1s">
+            <div class="cinema-screen" id="cinema-screen">
+                {{-- Images loaded dynamically --}}
+                <div id="cinema-placeholder" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/50 to-indigo-900/50">
+                    <div class="text-center">
+                        <span class="text-6xl mb-4 block">🎬</span>
+                        <p class="text-white text-lg font-semibold">Cliquez sur Play pour lancer le film</p>
+                        <p class="text-gray-400 text-sm mt-2">{{ count($scenes) }} scènes illustrées avec narration IA</p>
+                    </div>
+                </div>
+
+                {{-- Narration overlay --}}
+                <div class="cinema-overlay" id="cinema-overlay" style="display:none">
+                    <p id="cinema-narration" class="text-white text-lg font-medium leading-relaxed mb-2"></p>
+                    <div class="flex items-center gap-3">
+                        <span id="cinema-scene-label" class="scene-badge-part part-introduction">Scène 1</span>
+                        <span id="cinema-voice-badge" class="voice-badge"></span>
+                    </div>
+                </div>
             </div>
-            <div class="card-glass rounded-xl p-4 text-center">
-                <p class="text-2xl font-extrabold text-white">{{ $project->getTotalDuration() }}s</p>
-                <p class="text-gray-400 text-xs mt-1 uppercase tracking-wider">Durée totale</p>
+
+            {{-- Controls --}}
+            <div class="cinema-controls">
+                <button class="ctrl-btn" id="btn-play" onclick="togglePlay()" title="Lecture / Pause">
+                    <span id="play-icon">&#9654;</span>
+                </button>
+                <div class="progress-bar" id="progress-bar" onclick="seekProgress(event)">
+                    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+                </div>
+                <span class="text-gray-400 text-xs font-mono whitespace-nowrap" id="scene-counter">0 / {{ count($scenes) }}</span>
+                <button class="ctrl-btn" id="btn-restart" onclick="restartFilm()" title="Recommencer">&#8634;</button>
             </div>
-            <div class="card-glass rounded-xl p-4 text-center">
-                <p class="text-2xl font-extrabold text-white">#{{ $project->id }}</p>
-                <p class="text-gray-400 text-xs mt-1 uppercase tracking-wider">Projet</p>
+
+            {{-- Scene thumbnails strip --}}
+            <div class="flex gap-2 p-3 overflow-x-auto" id="thumb-strip">
+                @foreach($scenes as $i => $scene)
+                @php
+                    $imgUrl = $scene['image_url'] ?? '';
+                @endphp
+                <img src="{{ $imgUrl }}"
+                     alt="Scène {{ $scene['scene_number'] ?? $i+1 }}"
+                     class="scene-thumb"
+                     id="thumb-{{ $i }}"
+                     onclick="jumpToScene({{ $i }})"
+                     loading="lazy">
+                @endforeach
             </div>
         </div>
+        @endif
 
-        <div class="mb-8 fade-in-up" style="animation-delay:0.1s">
-            @php
-                $anyVideo = false;
-                $pendingCount = 0;
-                if ($project->scenes_json) {
-                    foreach ($project->scenes_json as $sc) {
-                        if (!empty($sc['video_url']) && filter_var($sc['video_url'], FILTER_VALIDATE_URL)
-                            && !str_contains($sc['video_url'], 'placeholder')) {
-                            $anyVideo = true;
-                        } elseif (!empty($sc['prediction_id'])) {
-                            $pendingCount++;
-                        }
-                    }
-                }
-                if (!$anyVideo) {
-                    $anyVideo = $project->video_url
-                        && !str_contains($project->video_url, 'placeholder')
-                        && !str_contains($project->video_url, 'demo-mode')
-                        && !str_contains($project->video_url, 'pending')
-                        && filter_var($project->video_url, FILTER_VALIDATE_URL);
-                }
-            @endphp
-
-            @if($pendingCount > 0)
-            <div id="video-progress-banner" class="card-glass rounded-2xl p-8 text-center mb-5">
-                <span class="text-5xl mb-4 inline-block">🎬</span>
-                <h3 class="text-white text-lg font-semibold mb-2">Vidéos en cours de génération...</h3>
-                <p class="text-gray-400 text-sm mb-4">
-                    Les vidéos sont générées par Replicate. Cela peut prendre 3 à 5 minutes.
-                </p>
-                <div class="w-full bg-purple-900/30 rounded-full h-3 mb-3">
-                    <div id="video-gen-progress" class="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
-                </div>
-                <p id="video-gen-status" class="text-purple-300 text-sm font-medium">
-                    0 / {{ count($project->scenes_json) }} vidéos prêtes
-                </p>
-            </div>
-            @elseif(!$anyVideo)
-            <div class="card-glass rounded-2xl p-8 text-center mb-5">
-                <span class="text-5xl mb-4 inline-block">🎥</span>
-                <h3 class="text-white text-lg font-semibold mb-2">Pipeline terminé avec succès !</h3>
-                <p class="text-gray-400 text-sm mb-3">
-                    L'histoire et les scènes ont été générées.
-                </p>
-                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
-                    Histoire &amp; scènes générées
-                </div>
-            </div>
-            @endif
-
-            {{-- Action buttons --}}
-            <div class="flex flex-col sm:flex-row gap-4">
-                <a href="{{ route('video.index') }}"
-                   class="btn-primary flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Générer une nouvelle vidéo
-                </a>
-
-                @if($project->scenes_json && count($project->scenes_json) > 0)
-                <button id="play-all-btn" onclick="playAll()"
-                        class="play-all-btn flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
-                    <span id="play-all-icon">▶</span>
-                    <span id="play-all-text">Lecture complète</span>
-                </button>
-                @endif
-            </div>
-
+        {{-- Action buttons --}}
+        <div class="flex flex-col sm:flex-row gap-4 mb-8 fade-in-up" style="animation-delay:0.15s">
+            <a href="{{ route('video.index') }}"
+               class="btn-primary flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
+                + Générer un nouveau film
+            </a>
             <a href="/video/{{ $project->id }}/download"
-               class="mt-4 w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2
-                      bg-white/8 border border-white/15 text-gray-300 hover:bg-white/12 hover:text-white transition-all duration-200 block">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/>
-                </svg>
-                Télécharger le pack complet (.zip) &mdash; histoire, script, scènes
+               class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2
+                      bg-white/8 border border-white/15 text-gray-300 hover:bg-white/12 hover:text-white transition-all duration-200">
+                Télécharger le pack complet (.zip)
             </a>
         </div>
 
+        {{-- Story --}}
         @if($project->story_text)
-        <div class="card-glass rounded-2xl p-8 mb-8 fade-in-up" style="animation-delay:0.2s">
-            <h2 class="text-white text-xl font-semibold mb-5 flex items-center gap-2">
-                <span class="text-purple-400">📖</span>
-                L'histoire complète
+        <div class="card-glass rounded-2xl p-6 mb-8 fade-in-up" style="animation-delay:0.2s">
+            <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+                <span class="text-purple-400">📖</span> L'histoire complète
             </h2>
-            <div class="story-block rounded-r-xl p-5 text-gray-300 text-sm">
+            <div class="story-block rounded-r-xl p-4 text-gray-300 text-sm">
                 {!! nl2br(e($project->story_text)) !!}
             </div>
         </div>
         @endif
 
-        @if($project->scenes_json && count($project->scenes_json) > 0)
+        {{-- All scenes list --}}
+        @if(count($scenes) > 0)
         <div class="fade-in-up" style="animation-delay:0.3s">
-            <h2 class="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                <span class="text-purple-400">🎬</span>
-                Les {{ count($project->scenes_json) }} scènes
+            <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+                <span class="text-purple-400">🎬</span> Les {{ count($scenes) }} scènes
             </h2>
-
-            <div class="flex flex-col gap-6">
-                @foreach($project->scenes_json as $scene)
+            <div class="flex flex-col gap-4">
+                @foreach($scenes as $i => $scene)
                 @php
-                    $sceneNum = $scene['scene_number'] ?? ($loop->index + 1);
-                    $sceneVideoUrl = $scene['video_url'] ?? '';
-                    $hasSceneVideo = $sceneVideoUrl
-                        && !str_contains($sceneVideoUrl, 'placeholder')
-                        && filter_var($sceneVideoUrl, FILTER_VALIDATE_URL);
+                    $sceneNum = $scene['scene_number'] ?? ($i + 1);
+                    $part = $scene['part'] ?? 'development';
+                    $partClass = match($part) { 'introduction' => 'part-introduction', 'conclusion' => 'part-conclusion', default => 'part-development' };
+                    $partLabel = match($part) { 'introduction' => 'Introduction', 'conclusion' => 'Conclusion', default => 'Développement' };
+                    $voiceType = $scene['voice'] ?? 'narratrice';
+                    $voiceLabel = $voiceLabels[$voiceType] ?? 'Narratrice';
+                    $imgUrl = $scene['image_url'] ?? '';
                 @endphp
-                <div class="scene-card overflow-hidden" id="scene-card-{{ $loop->index }}" data-scene-index="{{ $loop->index }}">
-                    {{-- Scene header --}}
-                    <div class="p-5 border-b border-white/5 flex items-center justify-between">
-                        <div class="scene-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-purple-300">
-                            Scène {{ $sceneNum }}
-                        </div>
-                        <span class="text-gray-500 text-xs font-mono">
-                            {{ $scene['duration_seconds'] ?? 15 }}s
-                        </span>
-                    </div>
-
-                    {{-- Video player --}}
-                    @if($hasSceneVideo)
-                    <div class="bg-black">
-                        <video id="video-{{ $loop->index }}" controls preload="metadata" class="w-full" style="max-height: 360px">
-                            <source src="{{ $sceneVideoUrl }}" type="video/mp4">
-                        </video>
-                    </div>
-                    @endif
-
-                    <div class="p-5">
-                        @if(!empty($scene['visual_description']))
-                        <div class="mb-3">
-                            <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Visuel</p>
-                            <p class="text-gray-400 text-xs leading-relaxed italic">
-                                {{ $scene['visual_description'] }}
-                            </p>
-                        </div>
+                <div class="scene-list-item p-4" id="scene-card-{{ $i }}">
+                    <div class="flex gap-4">
+                        @if($imgUrl)
+                        <img src="{{ $imgUrl }}" alt="Scène {{ $sceneNum }}"
+                             class="w-32 h-20 object-cover rounded-lg flex-shrink-0 cursor-pointer"
+                             onclick="jumpToScene({{ $i }})"
+                             loading="lazy">
                         @endif
-
-                        @if(!empty($scene['narration']))
-                        <div class="mb-3">
-                            <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Narration</p>
-                            <p class="text-gray-200 text-sm leading-relaxed">
-                                {{ $scene['narration'] }}
-                            </p>
-                        </div>
-
-                        {{-- ElevenLabs audio player --}}
-                        <div class="audio-controls p-3 mt-3">
-                            <div class="flex items-center gap-3">
-                                <button onclick="toggleAudio({{ $loop->index }})"
-                                        id="audio-btn-{{ $loop->index }}"
-                                        class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-600/40 hover:bg-purple-600/60 flex items-center justify-center text-purple-200 transition-all">
-                                    <span id="audio-icon-{{ $loop->index }}">🔊</span>
-                                </button>
-                                <div class="flex-1">
-                                    <audio id="audio-{{ $loop->index }}"
-                                           preload="none"
-                                           data-src="/video/{{ $project->id }}/tts/{{ $sceneNum }}">
-                                    </audio>
-                                    <p class="text-purple-300 text-xs" id="audio-status-{{ $loop->index }}">
-                                        Voix ElevenLabs — cliquer pour écouter
-                                    </p>
-                                    <div class="w-full bg-purple-900/30 rounded-full h-1 mt-1.5">
-                                        <div id="audio-progress-{{ $loop->index }}" class="bg-purple-400 h-1 rounded-full transition-all" style="width: 0%"></div>
-                                    </div>
-                                </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-white text-sm font-bold">Scène {{ $sceneNum }}</span>
+                                <span class="scene-badge-part {{ $partClass }}">{{ $partLabel }}</span>
+                                <span class="voice-badge">{{ $voiceLabel }}</span>
+                                <span class="text-gray-500 text-xs ml-auto">{{ $scene['duration_seconds'] ?? 10 }}s</span>
                             </div>
+                            <p class="text-gray-200 text-sm mb-1">{{ $scene['narration'] ?? '' }}</p>
+                            <p class="text-gray-500 text-xs italic">{{ $scene['visual_description'] ?? '' }}</p>
                         </div>
-                        @endif
                     </div>
                 </div>
                 @endforeach
@@ -296,8 +312,8 @@
         </div>
         @endif
 
-        <div class="mt-10 text-center text-gray-400 text-xs pb-4">
-            Fait par Julien YILDIZ &mdash; rendu test de stage &mdash; #{{ $project->id }}
+        <div class="mt-8 text-center text-gray-500 text-xs pb-4">
+            Fait par Julien YILDIZ &mdash; AI Kids Video Generator &mdash; #{{ $project->id }}
         </div>
     </div>
 
@@ -305,75 +321,164 @@
     (function() {
         'use strict';
 
-        const SCENE_COUNT = {{ count($project->scenes_json ?? []) }};
-        const sceneTexts = @json(collect($project->scenes_json ?? [])->pluck('narration')->toArray());
-        const audioElements = {};
-        const ttsFailedForScene = {};
-        let currentPlayingIndex = null;
-        let isPlayingAll = false;
-        let playAllIndex = 0;
+        const SCENES = @json($scenes);
+        const PROJECT_ID = {{ $project->id }};
+
+        let currentScene = -1;
+        let isPlaying = false;
+        let audioElements = {};
+        let ttsFailedForScene = {};
+        let sceneTimer = null;
         let currentUtterance = null;
 
-        // Lazy-load and toggle audio for a single scene
-        window.toggleAudio = function(index) {
-            // If using browser TTS fallback for this scene
+        // ─── Image management ───
+        const imgCache = {};
+
+        function getSceneImage(index) {
+            if (imgCache[index]) return imgCache[index];
+            const scene = SCENES[index];
+            if (!scene || !scene.image_url) return null;
+            const img = new Image();
+            img.src = scene.image_url;
+            img.className = 'hidden-img';
+            imgCache[index] = img;
+            return img;
+        }
+
+        // Preload first 3 images
+        for (let i = 0; i < Math.min(3, SCENES.length); i++) {
+            getSceneImage(i);
+        }
+
+        // ─── Cinema display ───
+        function showScene(index) {
+            if (index < 0 || index >= SCENES.length) return;
+
+            const screen = document.getElementById('cinema-screen');
+            const placeholder = document.getElementById('cinema-placeholder');
+            const overlay = document.getElementById('cinema-overlay');
+            const scene = SCENES[index];
+
+            // Hide placeholder
+            if (placeholder) placeholder.style.display = 'none';
+            overlay.style.display = '';
+
+            // Remove old active images
+            screen.querySelectorAll('img.active-img').forEach(img => {
+                img.classList.remove('active-img');
+                img.classList.add('hidden-img');
+                setTimeout(() => img.remove(), 1000);
+            });
+
+            // Add new image
+            const img = getSceneImage(index);
+            if (img) {
+                const clone = img.cloneNode();
+                clone.className = 'hidden-img';
+                screen.insertBefore(clone, overlay);
+                // Force reflow then animate
+                clone.offsetHeight;
+                clone.classList.remove('hidden-img');
+                clone.classList.add('active-img');
+            }
+
+            // Update narration + badges
+            document.getElementById('cinema-narration').textContent = scene.narration || '';
+            const label = document.getElementById('cinema-scene-label');
+            const part = scene.part || 'development';
+            label.textContent = 'Scène ' + (scene.scene_number || index + 1);
+            label.className = 'scene-badge-part part-' + part;
+
+            const voiceMap = { narratrice: 'Narratrice', narrateur: 'Narrateur', enfant_fille: 'Enfant (fille)', enfant_garcon: 'Enfant (garçon)' };
+            document.getElementById('cinema-voice-badge').textContent = voiceMap[scene.voice] || 'Narratrice';
+
+            // Update counter
+            document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
+
+            // Update progress
+            const pct = ((index + 1) / SCENES.length) * 100;
+            document.getElementById('progress-fill').style.width = pct + '%';
+
+            // Update thumbnails
+            document.querySelectorAll('.scene-thumb').forEach(t => t.classList.remove('active-thumb'));
+            const thumb = document.getElementById('thumb-' + index);
+            if (thumb) {
+                thumb.classList.add('active-thumb');
+                thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+
+            // Highlight scene card
+            document.querySelectorAll('.scene-list-item').forEach(c => c.classList.remove('active-scene'));
+            const card = document.getElementById('scene-card-' + index);
+            if (card) card.classList.add('active-scene');
+
+            currentScene = index;
+
+            // Preload next 2 images
+            getSceneImage(index + 1);
+            getSceneImage(index + 2);
+        }
+
+        // ─── Audio (ElevenLabs with browser TTS fallback) ───
+        function getAudio(index) {
+            if (audioElements[index]) return audioElements[index];
+            const scene = SCENES[index];
+            if (!scene) return null;
+            const sceneNum = scene.scene_number || (index + 1);
+            const audio = new Audio();
+            audio.preload = 'none';
+            audio.dataset.src = '/video/' + PROJECT_ID + '/tts/' + sceneNum;
+            audioElements[index] = audio;
+            return audio;
+        }
+
+        function playSceneAudio(index, onEnd) {
+            const scene = SCENES[index];
+            if (!scene || !scene.narration) {
+                onEnd();
+                return;
+            }
+
             if (ttsFailedForScene[index]) {
-                toggleBrowserTTS(index);
+                playBrowserTTS(index, onEnd);
                 return;
             }
 
             const audio = getAudio(index);
-            if (!audio) return;
-
-            // If another scene is playing, stop it
-            if (currentPlayingIndex !== null && currentPlayingIndex !== index) {
-                stopAudio(currentPlayingIndex);
+            if (!audio.src || audio.src === window.location.href) {
+                audio.src = audio.dataset.src;
             }
 
-            if (!audio.paused) {
-                audio.pause();
-                audio.currentTime = 0;
-                setAudioState(index, 'ready');
-                currentPlayingIndex = null;
-            } else {
-                audio.play().then(() => {
-                    setAudioState(index, 'playing');
-                    currentPlayingIndex = index;
-                    highlightScene(index);
-                }).catch(err => {
-                    console.warn('ElevenLabs play failed, falling back to browser TTS', err);
-                    ttsFailedForScene[index] = true;
-                    toggleBrowserTTS(index);
-                });
-            }
-        };
+            const handleEnd = () => { cleanup(); onEnd(); };
+            const handleError = () => {
+                cleanup();
+                ttsFailedForScene[index] = true;
+                playBrowserTTS(index, onEnd);
+            };
 
-        // Browser SpeechSynthesis fallback
-        function toggleBrowserTTS(index) {
-            if (!('speechSynthesis' in window)) {
-                setAudioState(index, 'error');
-                return;
+            function cleanup() {
+                audio.removeEventListener('ended', handleEnd);
+                audio.removeEventListener('error', handleError);
             }
 
-            const text = sceneTexts[index] || '';
-            if (!text) return;
+            audio.addEventListener('ended', handleEnd);
+            audio.addEventListener('error', handleError);
 
-            // If already speaking for this scene, stop
-            if (currentPlayingIndex === index && speechSynthesis.speaking) {
-                speechSynthesis.cancel();
-                currentUtterance = null;
-                setAudioState(index, 'ready');
-                currentPlayingIndex = null;
-                return;
-            }
+            audio.play().catch(() => {
+                cleanup();
+                ttsFailedForScene[index] = true;
+                playBrowserTTS(index, onEnd);
+            });
+        }
 
-            // Stop anything currently playing
-            if (currentPlayingIndex !== null) {
-                stopAudio(currentPlayingIndex);
-            }
+        function playBrowserTTS(index, onEnd) {
+            if (!('speechSynthesis' in window)) { onEnd(); return; }
+
+            const scene = SCENES[index];
+            if (!scene || !scene.narration) { onEnd(); return; }
+
             speechSynthesis.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(text);
+            const utterance = new SpeechSynthesisUtterance(scene.narration);
             utterance.lang = 'fr-FR';
             utterance.rate = 0.92;
             utterance.pitch = 1.05;
@@ -382,315 +487,101 @@
             const frVoice = voices.find(v => v.lang.startsWith('fr'));
             if (frVoice) utterance.voice = frVoice;
 
-            setAudioState(index, 'playing');
-            currentPlayingIndex = index;
-            highlightScene(index);
             currentUtterance = utterance;
-
-            utterance.onend = function() {
-                setAudioState(index, 'ready');
-                currentPlayingIndex = null;
-                currentUtterance = null;
-                if (isPlayingAll) {
-                    playAllIndex++;
-                    playNextScene();
-                }
-            };
-            utterance.onerror = function() {
-                setAudioState(index, 'error');
-                currentPlayingIndex = null;
-                currentUtterance = null;
-            };
-
+            utterance.onend = () => { currentUtterance = null; onEnd(); };
+            utterance.onerror = () => { currentUtterance = null; onEnd(); };
             speechSynthesis.speak(utterance);
         }
 
-        function getAudio(index) {
-            if (audioElements[index]) return audioElements[index];
-
-            const el = document.getElementById('audio-' + index);
-            if (!el) return null;
-
-            // Lazy load src
-            if (!el.src || el.src === '' || el.src === window.location.href) {
-                const dataSrc = el.getAttribute('data-src');
-                if (dataSrc) {
-                    el.src = dataSrc;
-                    el.load();
-                    setAudioState(index, 'loading');
-                }
-            }
-
-            el.addEventListener('ended', () => {
-                setAudioState(index, 'ready');
-                currentPlayingIndex = null;
-                if (isPlayingAll) {
-                    playAllIndex++;
-                    playNextScene();
-                }
-            });
-
-            el.addEventListener('timeupdate', () => {
-                if (el.duration) {
-                    const pct = (el.currentTime / el.duration) * 100;
-                    const bar = document.getElementById('audio-progress-' + index);
-                    if (bar) bar.style.width = pct + '%';
-                }
-            });
-
-            el.addEventListener('canplaythrough', () => {
-                if (audioElements[index] && audioElements[index].paused) {
-                    setAudioState(index, 'ready');
-                }
-            }, { once: true });
-
-            el.addEventListener('error', () => {
-                // ElevenLabs failed — fallback to browser TTS
-                console.warn('ElevenLabs audio failed for scene ' + index + ', using browser TTS fallback');
-                ttsFailedForScene[index] = true;
-                setAudioState(index, 'ready');
-                const statusEl = document.getElementById('audio-status-' + index);
-                if (statusEl) statusEl.textContent = 'Voix navigateur — cliquer pour écouter';
-            });
-
-            audioElements[index] = el;
-            return el;
+        function stopAllAudio() {
+            Object.values(audioElements).forEach(a => { a.pause(); a.currentTime = 0; });
+            speechSynthesis.cancel();
+            currentUtterance = null;
+            if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
         }
 
-        function stopAudio(index) {
-            // Stop browser TTS if active
-            if (ttsFailedForScene[index] || currentUtterance) {
-                speechSynthesis.cancel();
-                currentUtterance = null;
-            }
-            // Stop ElevenLabs audio
-            const audio = audioElements[index];
-            if (audio && !audio.paused) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
-            setAudioState(index, 'ready');
-            const bar = document.getElementById('audio-progress-' + index);
-            if (bar) bar.style.width = '0%';
-        }
-
-        function setAudioState(index, state) {
-            const icon = document.getElementById('audio-icon-' + index);
-            const status = document.getElementById('audio-status-' + index);
-            if (!icon || !status) return;
-
-            switch (state) {
-                case 'loading':
-                    icon.textContent = '⏳';
-                    status.textContent = 'Chargement de la voix...';
-                    break;
-                case 'playing':
-                    icon.textContent = '⏹️';
-                    status.textContent = 'Lecture en cours...';
-                    break;
-                case 'ready':
-                    icon.textContent = '🔊';
-                    status.textContent = 'Voix ElevenLabs — cliquer pour écouter';
-                    break;
-                case 'error':
-                    icon.textContent = '⚠️';
-                    status.textContent = 'Erreur de chargement audio';
-                    break;
-            }
-        }
-
-        function highlightScene(index) {
-            document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('active-scene'));
-            const card = document.getElementById('scene-card-' + index);
-            if (card) {
-                card.classList.add('active-scene');
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }
-
-        // Play All: sequential video + audio for each scene
-        window.playAll = function() {
-            if (isPlayingAll) {
-                stopPlayAll();
+        // ─── Playback control ───
+        function playScene(index) {
+            if (index >= SCENES.length) {
+                stopPlayback();
                 return;
             }
 
-            isPlayingAll = true;
-            playAllIndex = 0;
-            updatePlayAllBtn(true);
+            showScene(index);
 
-            // Stop any currently playing audio
-            if (currentPlayingIndex !== null) {
-                stopAudio(currentPlayingIndex);
-                currentPlayingIndex = null;
+            const scene = SCENES[index];
+            const duration = (scene.duration_seconds || 10) * 1000;
+
+            playSceneAudio(index, () => {
+                if (!isPlaying) return;
+                // If audio finished before scene duration, wait remaining
+                // If audio took longer, move on immediately
+                const next = () => { if (isPlaying) playScene(index + 1); };
+                // Small gap between scenes
+                sceneTimer = setTimeout(next, 500);
+            });
+
+            // Fallback: if audio takes too long, advance after scene duration + buffer
+            const maxWait = duration + 5000; // scene duration (ms) + 5s buffer
+            sceneTimer = setTimeout(() => {
+                if (isPlaying && currentScene === index) {
+                    stopAllAudio();
+                    playScene(index + 1);
+                }
+            }, maxWait);
+        }
+
+        window.togglePlay = function() {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                isPlaying = true;
+                document.getElementById('play-icon').innerHTML = '&#9646;&#9646;';
+                document.getElementById('btn-play').classList.add('active');
+                if (currentScene < 0 || currentScene >= SCENES.length - 1) {
+                    playScene(0);
+                } else {
+                    playScene(currentScene);
+                }
             }
-
-            playNextScene();
         };
 
-        function playNextScene() {
-            if (playAllIndex >= SCENE_COUNT || !isPlayingAll) {
-                stopPlayAll();
-                return;
-            }
-
-            highlightScene(playAllIndex);
-            const idx = playAllIndex;
-
-            // Try to play video first
-            const video = document.getElementById('video-' + idx);
-            if (video) {
-                video.currentTime = 0;
-                video.play().catch(() => {});
-            }
-
-            // Play audio (ElevenLabs or browser TTS fallback)
-            if (ttsFailedForScene[idx]) {
-                // Use browser TTS
-                toggleBrowserTTS(idx);
-            } else {
-                const audio = getAudio(idx);
-                if (audio) {
-                    if (!audio.src || audio.src === '' || audio.src === window.location.href) {
-                        const dataSrc = audio.getAttribute('data-src');
-                        if (dataSrc) {
-                            audio.src = dataSrc;
-                            audio.load();
-                        }
-                    }
-                    audio.currentTime = 0;
-                    const tryPlay = () => {
-                        audio.play().then(() => {
-                            setAudioState(idx, 'playing');
-                            currentPlayingIndex = idx;
-                        }).catch(() => {
-                            // Fallback to browser TTS
-                            ttsFailedForScene[idx] = true;
-                            toggleBrowserTTS(idx);
-                        });
-                    };
-
-                    if (audio.readyState >= 2) {
-                        tryPlay();
-                    } else {
-                        setAudioState(idx, 'loading');
-                        audio.addEventListener('canplaythrough', tryPlay, { once: true });
-                        setTimeout(() => {
-                            if (audio.readyState < 2 && isPlayingAll && playAllIndex === idx) {
-                                // Fallback to browser TTS on timeout
-                                ttsFailedForScene[idx] = true;
-                                toggleBrowserTTS(idx);
-                            }
-                        }, 5000);
-                    }
-                } else {
-                    // No audio element, try browser TTS
-                    toggleBrowserTTS(idx);
-                }
-            }
+        function stopPlayback() {
+            isPlaying = false;
+            stopAllAudio();
+            document.getElementById('play-icon').innerHTML = '&#9654;';
+            document.getElementById('btn-play').classList.remove('active');
         }
 
-        function stopPlayAll() {
-            isPlayingAll = false;
-            playAllIndex = 0;
-            if (currentPlayingIndex !== null) {
-                stopAudio(currentPlayingIndex);
-                currentPlayingIndex = null;
-            }
-            document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('active-scene'));
-            updatePlayAllBtn(false);
-        }
+        window.restartFilm = function() {
+            stopPlayback();
+            currentScene = -1;
+            isPlaying = true;
+            document.getElementById('play-icon').innerHTML = '&#9646;&#9646;';
+            document.getElementById('btn-play').classList.add('active');
+            playScene(0);
+        };
 
-        function updatePlayAllBtn(playing) {
-            const icon = document.getElementById('play-all-icon');
-            const text = document.getElementById('play-all-text');
-            if (!icon || !text) return;
-            if (playing) {
-                icon.textContent = '⏹';
-                text.textContent = 'Arrêter la lecture';
-            } else {
-                icon.textContent = '▶';
-                text.textContent = 'Lecture complète';
+        window.jumpToScene = function(index) {
+            stopAllAudio();
+            showScene(index);
+            if (isPlaying) {
+                playScene(index);
             }
-        }
+        };
 
-        // Preload browser voices for fallback
+        window.seekProgress = function(e) {
+            const bar = document.getElementById('progress-bar');
+            const rect = bar.getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            const target = Math.floor(pct * SCENES.length);
+            jumpToScene(Math.max(0, Math.min(target, SCENES.length - 1)));
+        };
+
+        // Preload browser voices
         if ('speechSynthesis' in window) {
             speechSynthesis.getVoices();
             speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
-        }
-
-        // ─── Video generation polling ───
-        const PENDING_VIDEOS = {{ $pendingCount ?? 0 }};
-        if (PENDING_VIDEOS > 0) {
-            let pollInterval = null;
-            let pollCount = 0;
-            const MAX_POLLS = 40; // ~10 minutes at 15s intervals
-
-            function pollVideos() {
-                pollCount++;
-                if (pollCount > MAX_POLLS) {
-                    clearInterval(pollInterval);
-                    const banner = document.getElementById('video-progress-banner');
-                    if (banner) {
-                        banner.innerHTML = '<span class="text-5xl mb-4 inline-block">⏱️</span>' +
-                            '<h3 class="text-white text-lg font-semibold mb-2">Génération plus longue que prévu</h3>' +
-                            '<p class="text-gray-400 text-sm">Rafraîchissez la page dans quelques minutes.</p>';
-                    }
-                    return;
-                }
-
-                fetch('/video/{{ $project->id }}/check-videos')
-                    .then(r => r.json())
-                    .then(data => {
-                        const pct = data.total > 0 ? Math.round((data.ready / data.total) * 100) : 0;
-                        const bar = document.getElementById('video-gen-progress');
-                        const status = document.getElementById('video-gen-status');
-
-                        if (bar) bar.style.width = pct + '%';
-                        if (status) status.textContent = data.ready + ' / ' + data.total + ' vidéos prêtes';
-
-                        // Dynamically add video players for completed scenes
-                        if (data.scenes) {
-                            data.scenes.forEach((scene, idx) => {
-                                const url = scene.video_url || '';
-                                if (url && url.startsWith('http') && !document.getElementById('video-' + idx)) {
-                                    const card = document.getElementById('scene-card-' + idx);
-                                    if (card) {
-                                        const header = card.querySelector('.p-5.border-b');
-                                        if (header) {
-                                            const videoDiv = document.createElement('div');
-                                            videoDiv.className = 'bg-black';
-                                            videoDiv.innerHTML = '<video id="video-' + idx + '" controls preload="metadata" class="w-full" style="max-height:360px">' +
-                                                '<source src="' + url + '" type="video/mp4"></video>';
-                                            header.after(videoDiv);
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        if (data.all_done) {
-                            clearInterval(pollInterval);
-                            const banner = document.getElementById('video-progress-banner');
-                            if (banner) {
-                                banner.innerHTML = '<span class="text-5xl mb-4 inline-block">🎉</span>' +
-                                    '<h3 class="text-white text-lg font-semibold mb-2">Toutes les vidéos sont prêtes !</h3>' +
-                                    '<p class="text-gray-400 text-sm mb-3">' + data.ready + ' vidéos générées avec succès.</p>' +
-                                    '<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">' +
-                                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' +
-                                    'Vidéos + histoire complètes</div>';
-                            }
-                        }
-                    })
-                    .catch(err => console.warn('Poll error:', err));
-            }
-
-            // Start polling after 30 seconds (give Replicate time to start)
-            setTimeout(() => {
-                pollVideos(); // First poll immediately
-                pollInterval = setInterval(pollVideos, 15000);
-            }, 30000);
         }
     })();
     </script>
