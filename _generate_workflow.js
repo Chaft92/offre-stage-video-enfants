@@ -149,7 +149,7 @@ function parseResp(input) {
   return input;
 }
 
-var createItems = $('Create Prediction').all();
+var createItems = $input.all();
 var predictionUrls = [];
 var debugInfo = [];
 
@@ -221,24 +221,20 @@ function parseResp(input) {
 }
 
 var videoUrls = {};
-var pollSources = ['Poll Final', 'Poll Prediction'];
 
-for (var src = 0; src < pollSources.length; src++) {
-  try {
-    var items = $(pollSources[src]).all();
-    for (var i = 0; i < items.length; i++) {
-      var sceneIdx = items[i].json.scene_index;
-      if (sceneIdx === undefined) sceneIdx = i;
-      if (videoUrls[sceneIdx]) continue;
+// $input.all() receives all items from the SplitInBatches done output
+var items = $input.all();
+for (var i = 0; i < items.length; i++) {
+  var sceneIdx = items[i].json.scene_index;
+  if (sceneIdx === undefined) sceneIdx = i;
+  if (videoUrls[sceneIdx]) continue;
 
-      var p = parseResp(items[i].json);
-      if (p && p.status === 'succeeded' && p.output) {
-        var out = p.output;
-        if (typeof out === 'string' && out.startsWith('http')) videoUrls[sceneIdx] = out;
-        else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') videoUrls[sceneIdx] = out[0];
-      }
-    }
-  } catch(e) {}
+  var p = parseResp(items[i].json);
+  if (p && p.status === 'succeeded' && p.output) {
+    var out = p.output;
+    if (typeof out === 'string' && out.startsWith('http')) videoUrls[sceneIdx] = out;
+    else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') videoUrls[sceneIdx] = out[0];
+  }
 }
 
 var scenes = [];
