@@ -71,7 +71,7 @@
         "options": {
           "response": {
             "response": {
-              "responseFormat": "json"
+              "responseFormat": "text"
             }
           }
         }
@@ -84,7 +84,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme      = $('Build Groq Request').first().json.theme;\nconst response   = $input.first().json;\n\nconst rawText = response.choices?.[0]?.message?.content ?? '';\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/\\s*```$/, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse Groq JSON response: ' + e.message + '\\nRaw: ' + rawText.slice(0, 500));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('Groq returned no valid scenes.');\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story:  parsed.story  || '',\n    moral:  parsed.moral  || '',\n    scenes: parsed.scenes,\n  }\n}];"
+        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme      = $('Build Groq Request').first().json.theme;\n\n// responseFormat 'text' stores the raw body in $json.data\nconst bodyText = $input.first().json.data ?? '';\n\nlet groqJson;\ntry {\n  groqJson = JSON.parse(bodyText);\n} catch (e) {\n  throw new Error('Groq HTTP response is not valid JSON: ' + e.message + '\\nBody start: ' + String(bodyText).slice(0, 300));\n}\n\nconst rawContent = groqJson.choices?.[0]?.message?.content ?? '';\nif (!rawContent) {\n  throw new Error('Groq returned empty content. Full response: ' + JSON.stringify(groqJson).slice(0, 500));\n}\n\n// Remove optional markdown code fences\nconst cleaned = rawContent.replace(/^```json\\s*/i, '').replace(/\\s*```$/i, '').trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse story JSON: ' + e.message + '\\nContent start: ' + cleaned.slice(0, 400));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes in Groq response. Keys found: ' + Object.keys(parsed).join(', '));\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story:  parsed.story  || '',\n    moral:  parsed.moral  || '',\n    scenes: parsed.scenes,\n  }\n}];"
       },
       "id": "d4e5f6a7-b8c9-0123-d4e5-f6a7b8c9d0e1",
       "name": "Parse Groq Response",
