@@ -33,15 +33,8 @@ return [
         'voice_id' => env('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL'),
     ],
 
-    'runway' => [
-        'api_key' => env('RUNWAY_API_KEY'),
-    ],
-
-    // Alternative gratuite à Runway ML (crédits offerts à l'inscription)
-    'replicate' => [
-        'api_key' => env('REPLICATE_API_TOKEN'),
-        'model'   => env('REPLICATE_VIDEO_MODEL', 'minimax/video-01'),
-    ],
+    // Images : Pollinations.ai (gratuit, aucune clé API requise)
+    // URL pattern: https://image.pollinations.ai/prompt/{description}?width=1280&height=720
 
     // Alternative gratuite à Claude pour la génération de l'histoire
     'groq' => [

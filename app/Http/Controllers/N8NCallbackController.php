@@ -15,6 +15,7 @@ class N8NCallbackController extends Controller
             'project_id'                       => ['required', 'integer', 'exists:video_projects,id'],
             'video_url'                        => ['required', 'string', 'max:1000'],
             'story_text'                       => ['required', 'string', 'max:50000'],
+            'moral'                            => ['nullable', 'string', 'max:1000'],
             'scenes_json'                      => ['required', 'array', 'min:1', 'max:25'],
             'scenes_json.*.scene_number'       => ['required', 'integer', 'min:1'],
             'scenes_json.*.narration'          => ['required', 'string'],
@@ -43,6 +44,7 @@ class N8NCallbackController extends Controller
             'current_step'  => 5,
             'video_url'     => 'slideshow',
             'story_text'    => $data['story_text'],
+            'moral'         => $data['moral'] ?? null,
             'scenes_json'   => $scenes,
             'error_message' => null,
         ]);

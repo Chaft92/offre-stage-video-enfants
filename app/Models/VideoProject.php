@@ -14,6 +14,7 @@ class VideoProject extends Model
         'status',
         'current_step',
         'story_text',
+        'moral',
         'scenes_json',
         'video_url',
         'audio_url',

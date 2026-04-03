@@ -267,6 +267,14 @@
             <div class="story-block rounded-r-xl p-4 text-gray-300 text-sm">
                 {!! nl2br(e($project->story_text)) !!}
             </div>
+            @if($project->moral)
+            <div class="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-900/20 to-yellow-900/20 border border-amber-500/20">
+                <p class="text-amber-300 text-sm font-semibold flex items-center gap-2 mb-1">
+                    <span>💡</span> La morale de l'histoire
+                </p>
+                <p class="text-amber-100/90 text-sm italic leading-relaxed">{{ $project->moral }}</p>
+            </div>
+            @endif
         </div>
         @endif
 

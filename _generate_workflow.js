@@ -219,12 +219,7 @@ const workflow = {
         rawContentType: "application/json",
         body: "={{ JSON.stringify($json.groqBody) }}",
         options: {
-          timeout: 60000,
-          retry: {
-            enabled: true,
-            maxRetries: 3,
-            retryInterval: 20000
-          }
+          timeout: 60000
         }
       },
       id: "call-groq",
