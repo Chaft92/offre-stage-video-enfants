@@ -1,5 +1,5 @@
 {
-  "name": "Video Pipeline v8 — 12 Scenes",
+  "name": "Video Pipeline v9 — 12 Scenes + SplitInBatches",
   "nodes": [
     {
       "parameters": {
@@ -62,21 +62,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        480,
+        460,
         400
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const webhookData = $('Webhook Trigger').first().json.body;\nconst theme = webhookData.theme;\nconst project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme from webhook');\n}\n\nconst groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 8192,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un auteur professionnel de videos educatives pour enfants de 6 a 10 ans. Tu ecris des scripts video de 400 a 500 mots. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown. Pas de code fences.'\n    },\n    {\n      role: 'user',\n      content: 'Ecris un script video educatif pour enfants sur le theme : \"' + theme + '\".\\n\\nRegles strictes :\\n- Le script complet (somme de toutes les narrations) doit faire entre 400 et 500 mots\\n- Decoupe en exactement 12 scenes\\n- Chaque scene dure entre 5 et 20 secondes\\n- Les descriptions visuelles sont en ANGLAIS (pour le generateur video)\\n- Les narrations sont en FRANCAIS (pour les enfants)\\n- Chaque description visuelle commence par \"A colorful cartoon\" ou \"A bright animated\" ou similaire\\n- La duree totale des scenes doit etre entre 120 et 180 secondes\\n\\nReponds avec ce JSON exact :\\n{\\n  \"story\": \"resume complet de l histoire en francais (50-80 mots)\",\\n  \"moral\": \"la morale de l histoire\",\\n  \"scenes\": [\\n    { \"scene_number\": 1, \"visual_description\": \"A colorful cartoon ...\", \"narration\": \"texte narration francais 30-45 mots\", \"duration_seconds\": 12 },\\n    ... (12 scenes au total)\\n  ]\\n}'\n    }\n  ]\n};\n\nreturn [{ json: { project_id, theme, groqBody } }];"
+        "jsCode": "var webhookData = $('Webhook Trigger').first().json.body;\nvar theme = webhookData.theme;\nvar project_id = webhookData.project_id;\n\nif (!project_id || !theme) {\n  throw new Error('Missing project_id or theme from webhook');\n}\n\nvar groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 8192,\n  temperature: 0.7,\n  response_format: { type: 'json_object' },\n  messages: [\n    {\n      role: 'system',\n      content: 'Tu es un auteur professionnel de videos educatives pour enfants de 6 a 10 ans. Tu ecris des scripts video de 400 a 500 mots. Tu reponds UNIQUEMENT en JSON valide. Pas de texte avant ou apres le JSON. Pas de markdown. Pas de code fences.'\n    },\n    {\n      role: 'user',\n      content: 'Ecris un script video educatif pour enfants sur le theme : \"' + theme + '\".\\n\\nRegles strictes :\\n- Le script complet (somme de toutes les narrations) doit faire entre 400 et 500 mots\\n- Decoupe en exactement 12 scenes\\n- Chaque scene dure entre 5 et 20 secondes\\n- Les descriptions visuelles sont en ANGLAIS (pour le generateur video)\\n- Les narrations sont en FRANCAIS (pour les enfants)\\n- Chaque description visuelle commence par \"A colorful cartoon\" ou \"A bright animated\" ou similaire\\n- La duree totale des scenes doit etre entre 120 et 180 secondes\\n\\nReponds avec ce JSON exact :\\n{\\n  \"story\": \"resume complet de l histoire en francais (50-80 mots)\",\\n  \"moral\": \"la morale de l histoire\",\\n  \"scenes\": [\\n    { \"scene_number\": 1, \"visual_description\": \"A colorful cartoon ...\", \"narration\": \"texte narration francais 30-45 mots\", \"duration_seconds\": 12 },\\n    ... (12 scenes au total)\\n  ]\\n}'\n    }\n  ]\n};\n\nreturn [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];"
       },
       "id": "build-groq",
       "name": "Build Groq Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        720,
+        680,
         400
       ]
     },
@@ -114,20 +114,20 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        960,
+        900,
         400
       ]
     },
     {
       "parameters": {
-        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n} else if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) content = g1.choices[0].message.content;\n    else content = input.data;\n  } catch(e1) { content = input.data; }\n} else {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) content = g2.choices[0].message.content;\n      else content = rawStr;\n    } catch(e2) { content = rawStr; }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Keys: ' + Object.keys(input).join(', '));\n}\n\nvar clean = content.trim();\nif (clean.indexOf('```') >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry { parsed = JSON.parse(clean); }\ncatch(e3) { throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300)); }\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10))\n  });\n}\n\nreturn [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];"
+        "jsCode": "var project_id = $('Build Groq Request').first().json.project_id;\nvar theme = $('Build Groq Request').first().json.theme;\nvar input = $input.first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nvar content = '';\nif (input.choices && input.choices[0] && input.choices[0].message) {\n  content = input.choices[0].message.content;\n} else if (typeof input.data === 'string' && input.data.length > 10) {\n  try {\n    var g1 = JSON.parse(input.data);\n    if (g1.choices) content = g1.choices[0].message.content;\n    else content = input.data;\n  } catch(e1) { content = input.data; }\n} else {\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) {\n    var rawStr = Buffer.from(bytes).toString('utf-8');\n    try {\n      var g2 = JSON.parse(rawStr);\n      if (g2.choices && g2.choices[0]) content = g2.choices[0].message.content;\n      else content = rawStr;\n    } catch(e2) { content = rawStr; }\n  }\n}\n\nif (!content || content.length < 5) {\n  throw new Error('Cannot extract Groq content. Keys: ' + Object.keys(input).join(', '));\n}\n\nvar clean = content.trim();\nvar fenceIdx = clean.indexOf('```');\nif (fenceIdx >= 0) {\n  var lines = clean.split('\\n');\n  if (lines[0].trim().indexOf('```') === 0) lines.shift();\n  if (lines.length > 0 && lines[lines.length - 1].trim() === '```') lines.pop();\n  clean = lines.join('\\n').trim();\n}\n\nvar parsed;\ntry { parsed = JSON.parse(clean); }\ncatch(e3) { throw new Error('Story JSON parse error: ' + e3.message + ' | Start: ' + clean.substring(0, 300)); }\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));\n}\n\nvar scenes = [];\nfor (var s = 0; s < parsed.scenes.length; s++) {\n  var sc = parsed.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number || (s + 1),\n    visual_description: sc.visual_description || 'A colorful cartoon scene',\n    narration: sc.narration || '',\n    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10))\n  });\n}\n\nreturn [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];"
       },
       "id": "parse-story",
       "name": "Parse Story",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1200,
+        1120,
         400
       ]
     },
@@ -175,21 +175,35 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1440,
+        1340,
         400
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "var data = $('Parse Story').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.scenes.length; i++) {\n  var sc = data.scenes[i];\n  var prompt = sc.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, high quality, 5 seconds.';\n  items.push({\n    json: {\n      project_id: data.project_id,\n      scene_index: i,\n      scene_number: sc.scene_number,\n      prompt: prompt,\n      replicate_body: JSON.stringify({ input: { prompt: prompt, prompt_optimizer: true } })\n    }\n  });\n}\n\nreturn items;"
+        "jsCode": "var data = $('Parse Story').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.scenes.length; i++) {\n  var sc = data.scenes[i];\n  items.push({\n    json: {\n      project_id: data.project_id,\n      scene_index: i,\n      scene_number: sc.scene_number,\n      prompt: sc.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, high quality, 5 seconds.'\n    }\n  });\n}\n\nreturn items;"
       },
       "id": "split-scenes",
       "name": "Split Scenes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1680,
+        1560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "batch-create",
+      "name": "Batch Create",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1780,
         400
       ]
     },
@@ -217,31 +231,31 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ $json.replicate_body }}",
+        "body": "={{ JSON.stringify({ input: { prompt: $json.prompt, prompt_optimizer: true } }) }}",
         "options": {
           "timeout": 30000
         }
       },
-      "id": "create-predictions",
-      "name": "Create Predictions",
+      "id": "create-prediction",
+      "name": "Create Prediction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1920,
-        400
+        2000,
+        600
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.id) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar createItems = $('Create Predictions').all();\nvar predictionUrls = [];\n\nfor (var i = 0; i < createItems.length; i++) {\n  var raw = createItems[i].json;\n  var p = parseResp(raw);\n  if (p && p.id) {\n    predictionUrls.push((p.urls && p.urls.get) ? p.urls.get : 'https://api.replicate.com/v1/predictions/' + p.id);\n  } else {\n    predictionUrls.push('');\n  }\n}\n\nreturn [{ json: {\n  project_id: storyData.project_id,\n  prediction_urls: predictionUrls,\n  scene_count: storyData.scenes.length\n} }];"
+        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.id) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar createItems = $('Create Prediction').all();\nvar predictionUrls = [];\nvar debugInfo = [];\n\nfor (var i = 0; i < createItems.length; i++) {\n  var raw = createItems[i].json;\n  var p = parseResp(raw);\n  debugInfo.push('item' + i + ':id=' + (p ? p.id : 'null') + ',status=' + (p ? p.status : 'null'));\n  if (p && p.id) {\n    predictionUrls.push((p.urls && p.urls.get) ? p.urls.get : 'https://api.replicate.com/v1/predictions/' + p.id);\n  } else {\n    predictionUrls.push('');\n  }\n}\n\nreturn [{ json: {\n  project_id: storyData.project_id,\n  prediction_urls: predictionUrls,\n  scene_count: storyData.scenes.length,\n  debug: 'Created ' + createItems.length + ' predictions: ' + debugInfo.join('; ')\n} }];"
       },
       "id": "collect-predictions",
       "name": "Collect Predictions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2160,
+        2000,
         400
       ]
     },
@@ -289,7 +303,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2400,
+        2220,
         400
       ],
       "onError": "continueRegularOutput"
@@ -304,7 +318,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        2640,
+        2440,
         400
       ]
     },
@@ -312,10 +326,24 @@
       "parameters": {
         "jsCode": "var data = $('Collect Predictions').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.prediction_urls.length; i++) {\n  if (data.prediction_urls[i]) {\n    items.push({\n      json: {\n        poll_url: data.prediction_urls[i],\n        scene_index: i,\n        project_id: data.project_id\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  items.push({ json: { poll_url: 'https://api.replicate.com/v1/predictions/none', scene_index: -1, project_id: data.project_id } });\n}\n\nreturn items;"
       },
-      "id": "split-for-poll",
+      "id": "split-poll",
       "name": "Split for Poll",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "position": [
+        2660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "batch-poll",
+      "name": "Batch Poll",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
       "position": [
         2880,
         400
@@ -342,13 +370,13 @@
           "timeout": 15000
         }
       },
-      "id": "poll-predictions",
-      "name": "Poll Predictions",
+      "id": "poll-prediction",
+      "name": "Poll Prediction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3120,
-        400
+        3100,
+        600
       ],
       "onError": "continueRegularOutput"
     },
@@ -396,7 +424,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3360,
+        3100,
         400
       ],
       "onError": "continueRegularOutput"
@@ -411,7 +439,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        3600,
+        3320,
         400
       ]
     },
@@ -419,12 +447,26 @@
       "parameters": {
         "jsCode": "var data = $('Collect Predictions').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.prediction_urls.length; i++) {\n  if (data.prediction_urls[i]) {\n    items.push({\n      json: {\n        poll_url: data.prediction_urls[i],\n        scene_index: i,\n        project_id: data.project_id\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  items.push({ json: { poll_url: 'https://api.replicate.com/v1/predictions/none', scene_index: -1, project_id: data.project_id } });\n}\n\nreturn items;"
       },
-      "id": "split-for-poll-2",
+      "id": "split-poll-2",
       "name": "Split for Poll 2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3840,
+        3540,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "batch-poll-2",
+      "name": "Batch Poll 2",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3760,
         400
       ]
     },
@@ -454,21 +496,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4080,
-        400
+        3980,
+        600
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.status) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar videoUrls = {};\nvar pollSources = ['Poll Final', 'Poll Predictions'];\n\nfor (var src = 0; src < pollSources.length; src++) {\n  try {\n    var items = $(pollSources[src]).all();\n    for (var i = 0; i < items.length; i++) {\n      var sceneIdx = items[i].json.scene_index;\n      if (sceneIdx === undefined) sceneIdx = i;\n      if (videoUrls[sceneIdx]) continue;\n\n      var p = parseResp(items[i].json);\n      if (p && p.status === 'succeeded' && p.output) {\n        var out = p.output;\n        if (typeof out === 'string' && out.startsWith('http')) videoUrls[sceneIdx] = out;\n        else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') videoUrls[sceneIdx] = out[0];\n      }\n    }\n  } catch(e) {}\n}\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    video_url: videoUrls[s] || ''\n  });\n}\n\nvar mainVideoUrl = '';\nfor (var k in videoUrls) {\n  if (videoUrls[k]) { mainVideoUrl = videoUrls[k]; break; }\n}\nif (!mainVideoUrl) mainVideoUrl = 'https://demo-video-placeholder.example.com/video.mp4';\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: mainVideoUrl,\n  story_text: storyData.story,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
+        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.status) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar videoUrls = {};\nvar pollSources = ['Poll Final', 'Poll Prediction'];\n\nfor (var src = 0; src < pollSources.length; src++) {\n  try {\n    var items = $(pollSources[src]).all();\n    for (var i = 0; i < items.length; i++) {\n      var sceneIdx = items[i].json.scene_index;\n      if (sceneIdx === undefined) sceneIdx = i;\n      if (videoUrls[sceneIdx]) continue;\n\n      var p = parseResp(items[i].json);\n      if (p && p.status === 'succeeded' && p.output) {\n        var out = p.output;\n        if (typeof out === 'string' && out.startsWith('http')) videoUrls[sceneIdx] = out;\n        else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') videoUrls[sceneIdx] = out[0];\n      }\n    }\n  } catch(e) {}\n}\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    video_url: videoUrls[s] || ''\n  });\n}\n\nvar mainVideoUrl = '';\nfor (var k in videoUrls) {\n  if (videoUrls[k]) { mainVideoUrl = videoUrls[k]; break; }\n}\nif (!mainVideoUrl) mainVideoUrl = 'https://demo-video-placeholder.example.com/video.mp4';\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: mainVideoUrl,\n  story_text: storyData.story,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
       },
       "id": "prepare-callback",
       "name": "Prepare Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
+        3980,
         400
       ]
     },
@@ -516,7 +558,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4560,
+        4200,
         400
       ],
       "onError": "continueRegularOutput"
@@ -555,7 +597,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4800,
+        4420,
         400
       ]
     }
@@ -631,18 +673,36 @@
       "main": [
         [
           {
-            "node": "Create Predictions",
+            "node": "Batch Create",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create Predictions": {
+    "Batch Create": {
       "main": [
         [
           {
+            "node": "Create Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Collect Predictions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Prediction": {
+      "main": [
+        [
+          {
+            "node": "Batch Create",
             "type": "main",
             "index": 0
           }
@@ -686,18 +746,36 @@
       "main": [
         [
           {
-            "node": "Poll Predictions",
+            "node": "Batch Poll",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Poll Predictions": {
+    "Batch Poll": {
       "main": [
         [
           {
+            "node": "Poll Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Notify Step 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Prediction": {
+      "main": [
+        [
+          {
+            "node": "Batch Poll",
             "type": "main",
             "index": 0
           }
@@ -730,7 +808,25 @@
       "main": [
         [
           {
+            "node": "Batch Poll 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Poll 2": {
+      "main": [
+        [
+          {
             "node": "Poll Final",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Callback",
             "type": "main",
             "index": 0
           }
@@ -741,7 +837,7 @@
       "main": [
         [
           {
-            "node": "Prepare Callback",
+            "node": "Batch Poll 2",
             "type": "main",
             "index": 0
           }

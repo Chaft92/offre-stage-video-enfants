@@ -1,18 +1,18 @@
-// Script to generate the n8n workflow JSON with proper escaping
+// Script to generate the n8n workflow JSON
 // Run: node _generate_workflow.js
-// v8 — Full pipeline: Groq (12 scenes, 400-500 words) + 12x Replicate video + ElevenLabs TTS
+// v9 — 12 scenes, SplitInBatches loops for Replicate, reliable polling
 
 // ─── Code: Build Groq Request ───
 const buildGroqCode = `
-const webhookData = $('Webhook Trigger').first().json.body;
-const theme = webhookData.theme;
-const project_id = webhookData.project_id;
+var webhookData = $('Webhook Trigger').first().json.body;
+var theme = webhookData.theme;
+var project_id = webhookData.project_id;
 
 if (!project_id || !theme) {
   throw new Error('Missing project_id or theme from webhook');
 }
 
-const groqBody = {
+var groqBody = {
   model: 'llama-3.3-70b-versatile',
   max_tokens: 8192,
   temperature: 0.7,
@@ -29,7 +29,7 @@ const groqBody = {
   ]
 };
 
-return [{ json: { project_id, theme, groqBody } }];
+return [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];
 `.trim();
 
 // ─── Code: Parse Story (handles Buffer) ───
@@ -75,7 +75,8 @@ if (!content || content.length < 5) {
 }
 
 var clean = content.trim();
-if (clean.indexOf('\`\`\`') >= 0) {
+var fenceIdx = clean.indexOf('\`\`\`');
+if (fenceIdx >= 0) {
   var lines = clean.split('\\n');
   if (lines[0].trim().indexOf('\`\`\`') === 0) lines.shift();
   if (lines.length > 0 && lines[lines.length - 1].trim() === '\`\`\`') lines.pop();
@@ -111,14 +112,12 @@ var items = [];
 
 for (var i = 0; i < data.scenes.length; i++) {
   var sc = data.scenes[i];
-  var prompt = sc.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, high quality, 5 seconds.';
   items.push({
     json: {
       project_id: data.project_id,
       scene_index: i,
       scene_number: sc.scene_number,
-      prompt: prompt,
-      replicate_body: JSON.stringify({ input: { prompt: prompt, prompt_optimizer: true } })
+      prompt: sc.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, high quality, 5 seconds.'
     }
   });
 }
@@ -126,8 +125,8 @@ for (var i = 0; i < data.scenes.length; i++) {
 return items;
 `.trim();
 
-// ─── Code: Collect Predictions (back to single item with all prediction URLs) ───
-const collectVideosCode = `
+// ─── Code: Collect Predictions (reads all Create Prediction outputs) ───
+const collectPredictionsCode = `
 var storyData = $('Parse Story').first().json;
 
 function findBufferBytes(obj, depth) {
@@ -150,12 +149,14 @@ function parseResp(input) {
   return input;
 }
 
-var createItems = $('Create Predictions').all();
+var createItems = $('Create Prediction').all();
 var predictionUrls = [];
+var debugInfo = [];
 
 for (var i = 0; i < createItems.length; i++) {
   var raw = createItems[i].json;
   var p = parseResp(raw);
+  debugInfo.push('item' + i + ':id=' + (p ? p.id : 'null') + ',status=' + (p ? p.status : 'null'));
   if (p && p.id) {
     predictionUrls.push((p.urls && p.urls.get) ? p.urls.get : 'https://api.replicate.com/v1/predictions/' + p.id);
   } else {
@@ -166,7 +167,8 @@ for (var i = 0; i < createItems.length; i++) {
 return [{ json: {
   project_id: storyData.project_id,
   prediction_urls: predictionUrls,
-  scene_count: storyData.scenes.length
+  scene_count: storyData.scenes.length,
+  debug: 'Created ' + createItems.length + ' predictions: ' + debugInfo.join('; ')
 } }];
 `.trim();
 
@@ -219,7 +221,7 @@ function parseResp(input) {
 }
 
 var videoUrls = {};
-var pollSources = ['Poll Final', 'Poll Predictions'];
+var pollSources = ['Poll Final', 'Poll Prediction'];
 
 for (var src = 0; src < pollSources.length; src++) {
   try {
@@ -302,7 +304,7 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
 
 // ─── Build workflow ───
 const workflow = {
-  name: "Video Pipeline v8 — 12 Scenes",
+  name: "Video Pipeline v9 — 12 Scenes + SplitInBatches",
   nodes: [
     // 1. Webhook Trigger
     {
@@ -321,7 +323,7 @@ const workflow = {
     },
 
     // 2. Notify Step 1
-    makeNotifyNode("step1", "Notify Step 1", 1, [480, 400], "={{ $json.body.project_id }}"),
+    makeNotifyNode("step1", "Notify Step 1", 1, [460, 400], "={{ $json.body.project_id }}"),
 
     // 3. Build Groq Request
     {
@@ -330,7 +332,7 @@ const workflow = {
       name: "Build Groq Request",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [720, 400]
+      position: [680, 400]
     },
 
     // 4. Call Groq API
@@ -356,7 +358,7 @@ const workflow = {
       name: "Call Groq API",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [960, 400]
+      position: [900, 400]
     },
 
     // 5. Parse Story
@@ -366,11 +368,11 @@ const workflow = {
       name: "Parse Story",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [1200, 400]
+      position: [1120, 400]
     },
 
     // 6. Notify Step 2
-    makeNotifyNode("step2", "Notify Step 2", 2, [1440, 400], "={{ $json.project_id }}"),
+    makeNotifyNode("step2", "Notify Step 2", 2, [1340, 400], "={{ $json.project_id }}"),
 
     // 7. Split Scenes (outputs 12 items)
     {
@@ -379,10 +381,23 @@ const workflow = {
       name: "Split Scenes",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [1680, 400]
+      position: [1560, 400]
     },
 
-    // 8. Create Predictions (auto-processes all 12 items)
+    // 8. Batch Create (SplitInBatches — loops through items one by one)
+    {
+      parameters: {
+        batchSize: 1,
+        options: {}
+      },
+      id: "batch-create",
+      name: "Batch Create",
+      type: "n8n-nodes-base.splitInBatches",
+      typeVersion: 3,
+      position: [1780, 400]
+    },
+
+    // 9. Create Prediction (HTTP Request, processes 1 item at a time via loop)
     {
       parameters: {
         method: "POST",
@@ -398,51 +413,64 @@ const workflow = {
         sendBody: true,
         contentType: "raw",
         rawContentType: "application/json",
-        body: "={{ $json.replicate_body }}",
+        body: "={{ JSON.stringify({ input: { prompt: $json.prompt, prompt_optimizer: true } }) }}",
         options: { timeout: 30000 }
       },
-      id: "create-predictions",
-      name: "Create Predictions",
+      id: "create-prediction",
+      name: "Create Prediction",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [1920, 400],
+      position: [2000, 600],
       onError: "continueRegularOutput"
     },
 
-    // 9. Collect Predictions
+    // 10. Collect Predictions (Code — reads all Create Prediction outputs)
     {
-      parameters: { jsCode: collectVideosCode },
+      parameters: { jsCode: collectPredictionsCode },
       id: "collect-predictions",
       name: "Collect Predictions",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [2160, 400]
+      position: [2000, 400]
     },
 
-    // 10. Notify Step 3
-    makeNotifyNode("step3", "Notify Step 3", 3, [2400, 400], "={{ $json.project_id }}"),
+    // 11. Notify Step 3
+    makeNotifyNode("step3", "Notify Step 3", 3, [2220, 400], "={{ $json.project_id }}"),
 
-    // 11. Wait 5 minutes
+    // 12. Wait 5 minutes
     {
       parameters: { amount: 5, unit: "minutes" },
       id: "wait-5min",
       name: "Wait 5min",
       type: "n8n-nodes-base.wait",
       typeVersion: 1.1,
-      position: [2640, 400]
+      position: [2440, 400]
     },
 
-    // 12. Split for Poll
+    // 13. Split for Poll (outputs 12 items from prediction URLs)
     {
       parameters: { jsCode: splitForPollCode },
-      id: "split-for-poll",
+      id: "split-poll",
       name: "Split for Poll",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
+      position: [2660, 400]
+    },
+
+    // 14. Batch Poll (SplitInBatches)
+    {
+      parameters: {
+        batchSize: 1,
+        options: {}
+      },
+      id: "batch-poll",
+      name: "Batch Poll",
+      type: "n8n-nodes-base.splitInBatches",
+      typeVersion: 3,
       position: [2880, 400]
     },
 
-    // 13. Poll Predictions (auto-processes all items)
+    // 15. Poll Prediction (HTTP GET)
     {
       parameters: {
         method: "GET",
@@ -456,38 +484,51 @@ const workflow = {
         },
         options: { timeout: 15000 }
       },
-      id: "poll-predictions",
-      name: "Poll Predictions",
+      id: "poll-prediction",
+      name: "Poll Prediction",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [3120, 400],
+      position: [3100, 600],
       onError: "continueRegularOutput"
     },
 
-    // 14. Notify Step 4
-    makeNotifyNode("step4", "Notify Step 4", 4, [3360, 400], "={{ $('Collect Predictions').first().json.project_id }}"),
+    // 16. Notify Step 4
+    makeNotifyNode("step4", "Notify Step 4", 4, [3100, 400], "={{ $('Collect Predictions').first().json.project_id }}"),
 
-    // 15. Wait 3 more minutes
+    // 17. Wait 3 more minutes
     {
       parameters: { amount: 3, unit: "minutes" },
       id: "wait-3min",
       name: "Wait 3min",
       type: "n8n-nodes-base.wait",
       typeVersion: 1.1,
-      position: [3600, 400]
+      position: [3320, 400]
     },
 
-    // 16. Split for Poll 2
+    // 18. Split for Poll 2
     {
       parameters: { jsCode: splitForPollCode },
-      id: "split-for-poll-2",
+      id: "split-poll-2",
       name: "Split for Poll 2",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [3840, 400]
+      position: [3540, 400]
     },
 
-    // 17. Poll Final (auto-processes all items)
+    // 19. Batch Poll 2 (SplitInBatches)
+    {
+      parameters: {
+        batchSize: 1,
+        options: {}
+      },
+      id: "batch-poll-2",
+      name: "Batch Poll 2",
+      type: "n8n-nodes-base.splitInBatches",
+      typeVersion: 3,
+      position: [3760, 400]
+    },
+
+    // 20. Poll Final (HTTP GET)
     {
       parameters: {
         method: "GET",
@@ -505,24 +546,24 @@ const workflow = {
       name: "Poll Final",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [4080, 400],
+      position: [3980, 600],
       onError: "continueRegularOutput"
     },
 
-    // 18. Prepare Callback
+    // 21. Prepare Callback
     {
       parameters: { jsCode: prepareCallbackCode },
       id: "prepare-callback",
       name: "Prepare Callback",
       type: "n8n-nodes-base.code",
       typeVersion: 2,
-      position: [4320, 400]
+      position: [3980, 400]
     },
 
-    // 19. Notify Step 5
-    makeNotifyNode("step5", "Notify Step 5", 5, [4560, 400], "={{ $json.project_id }}"),
+    // 22. Notify Step 5
+    makeNotifyNode("step5", "Notify Step 5", 5, [4200, 400], "={{ $json.project_id }}"),
 
-    // 20. Send Callback
+    // 23. Send Callback
     {
       parameters: {
         method: "POST",
@@ -545,29 +586,55 @@ const workflow = {
       name: "Send Callback",
       type: "n8n-nodes-base.httpRequest",
       typeVersion: 4.2,
-      position: [4800, 400]
+      position: [4420, 400]
     }
   ],
   connections: {
+    // Linear flow
     "Webhook Trigger":     { main: [[{ node: "Notify Step 1",       type: "main", index: 0 }]] },
-    "Notify Step 1":       { main: [[{ node: "Build Groq Request",   type: "main", index: 0 }]] },
-    "Build Groq Request":  { main: [[{ node: "Call Groq API",        type: "main", index: 0 }]] },
-    "Call Groq API":       { main: [[{ node: "Parse Story",          type: "main", index: 0 }]] },
-    "Parse Story":         { main: [[{ node: "Notify Step 2",        type: "main", index: 0 }]] },
-    "Notify Step 2":       { main: [[{ node: "Split Scenes",         type: "main", index: 0 }]] },
-    "Split Scenes":        { main: [[{ node: "Create Predictions",   type: "main", index: 0 }]] },
-    "Create Predictions":  { main: [[{ node: "Collect Predictions",  type: "main", index: 0 }]] },
-    "Collect Predictions": { main: [[{ node: "Notify Step 3",        type: "main", index: 0 }]] },
-    "Notify Step 3":       { main: [[{ node: "Wait 5min",            type: "main", index: 0 }]] },
-    "Wait 5min":           { main: [[{ node: "Split for Poll",       type: "main", index: 0 }]] },
-    "Split for Poll":      { main: [[{ node: "Poll Predictions",     type: "main", index: 0 }]] },
-    "Poll Predictions":    { main: [[{ node: "Notify Step 4",        type: "main", index: 0 }]] },
-    "Notify Step 4":       { main: [[{ node: "Wait 3min",            type: "main", index: 0 }]] },
-    "Wait 3min":           { main: [[{ node: "Split for Poll 2",     type: "main", index: 0 }]] },
-    "Split for Poll 2":    { main: [[{ node: "Poll Final",           type: "main", index: 0 }]] },
-    "Poll Final":          { main: [[{ node: "Prepare Callback",     type: "main", index: 0 }]] },
-    "Prepare Callback":    { main: [[{ node: "Notify Step 5",        type: "main", index: 0 }]] },
-    "Notify Step 5":       { main: [[{ node: "Send Callback",        type: "main", index: 0 }]] }
+    "Notify Step 1":       { main: [[{ node: "Build Groq Request",  type: "main", index: 0 }]] },
+    "Build Groq Request":  { main: [[{ node: "Call Groq API",       type: "main", index: 0 }]] },
+    "Call Groq API":       { main: [[{ node: "Parse Story",         type: "main", index: 0 }]] },
+    "Parse Story":         { main: [[{ node: "Notify Step 2",       type: "main", index: 0 }]] },
+    "Notify Step 2":       { main: [[{ node: "Split Scenes",        type: "main", index: 0 }]] },
+    "Split Scenes":        { main: [[{ node: "Batch Create",        type: "main", index: 0 }]] },
+
+    // Loop 1: Create predictions one by one
+    // SplitInBatches output 0 = loop (current batch), output 1 = done
+    "Batch Create": { main: [
+      [{ node: "Create Prediction",   type: "main", index: 0 }],  // output 0: loop
+      [{ node: "Collect Predictions", type: "main", index: 0 }]   // output 1: done
+    ]},
+    "Create Prediction": { main: [[{ node: "Batch Create", type: "main", index: 0 }]] }, // loop back
+
+    // Continue after all predictions created
+    "Collect Predictions": { main: [[{ node: "Notify Step 3",  type: "main", index: 0 }]] },
+    "Notify Step 3":       { main: [[{ node: "Wait 5min",      type: "main", index: 0 }]] },
+    "Wait 5min":           { main: [[{ node: "Split for Poll", type: "main", index: 0 }]] },
+    "Split for Poll":      { main: [[{ node: "Batch Poll",     type: "main", index: 0 }]] },
+
+    // Loop 2: Poll predictions one by one
+    "Batch Poll": { main: [
+      [{ node: "Poll Prediction", type: "main", index: 0 }],  // output 0: loop
+      [{ node: "Notify Step 4",   type: "main", index: 0 }]   // output 1: done
+    ]},
+    "Poll Prediction": { main: [[{ node: "Batch Poll", type: "main", index: 0 }]] }, // loop back
+
+    // Continue after first poll
+    "Notify Step 4":       { main: [[{ node: "Wait 3min",          type: "main", index: 0 }]] },
+    "Wait 3min":           { main: [[{ node: "Split for Poll 2",   type: "main", index: 0 }]] },
+    "Split for Poll 2":   { main: [[{ node: "Batch Poll 2",       type: "main", index: 0 }]] },
+
+    // Loop 3: Final poll one by one
+    "Batch Poll 2": { main: [
+      [{ node: "Poll Final",        type: "main", index: 0 }],  // output 0: loop
+      [{ node: "Prepare Callback",  type: "main", index: 0 }]   // output 1: done
+    ]},
+    "Poll Final": { main: [[{ node: "Batch Poll 2", type: "main", index: 0 }]] }, // loop back
+
+    // Final steps
+    "Prepare Callback":    { main: [[{ node: "Notify Step 5", type: "main", index: 0 }]] },
+    "Notify Step 5":       { main: [[{ node: "Send Callback",  type: "main", index: 0 }]] }
   },
   active: false,
   settings: { executionOrder: "v1" }
@@ -579,9 +646,13 @@ require('fs').writeFileSync(
   'utf-8'
 );
 
-console.log('Workflow v8 generated successfully!');
+console.log('Workflow v9 generated successfully!');
 console.log('Nodes:', workflow.nodes.length);
+console.log('Loops: 3 SplitInBatches (Create, Poll, Final Poll)');
 console.log('Flow:');
 Object.entries(workflow.connections).forEach(([k, v]) => {
-  console.log('  ' + k + ' -> ' + v.main[0].map(c => c.node).join(', '));
+  const targets = v.main.map((arr, idx) =>
+    arr.map(c => c.node).join(', ') + (v.main.length > 1 ? ` [out${idx}]` : '')
+  );
+  console.log('  ' + k + ' -> ' + targets.join(' | '));
 });

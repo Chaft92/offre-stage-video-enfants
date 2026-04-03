@@ -290,13 +290,22 @@
         'use strict';
 
         const SCENE_COUNT = {{ count($project->scenes_json ?? []) }};
+        const sceneTexts = @json(collect($project->scenes_json ?? [])->pluck('narration')->toArray());
         const audioElements = {};
+        const ttsFailedForScene = {};
         let currentPlayingIndex = null;
         let isPlayingAll = false;
         let playAllIndex = 0;
+        let currentUtterance = null;
 
         // Lazy-load and toggle audio for a single scene
         window.toggleAudio = function(index) {
+            // If using browser TTS fallback for this scene
+            if (ttsFailedForScene[index]) {
+                toggleBrowserTTS(index);
+                return;
+            }
+
             const audio = getAudio(index);
             if (!audio) return;
 
@@ -316,11 +325,69 @@
                     currentPlayingIndex = index;
                     highlightScene(index);
                 }).catch(err => {
-                    setAudioState(index, 'error');
-                    console.error('Audio play error:', err);
+                    console.warn('ElevenLabs play failed, falling back to browser TTS', err);
+                    ttsFailedForScene[index] = true;
+                    toggleBrowserTTS(index);
                 });
             }
         };
+
+        // Browser SpeechSynthesis fallback
+        function toggleBrowserTTS(index) {
+            if (!('speechSynthesis' in window)) {
+                setAudioState(index, 'error');
+                return;
+            }
+
+            const text = sceneTexts[index] || '';
+            if (!text) return;
+
+            // If already speaking for this scene, stop
+            if (currentPlayingIndex === index && speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                currentUtterance = null;
+                setAudioState(index, 'ready');
+                currentPlayingIndex = null;
+                return;
+            }
+
+            // Stop anything currently playing
+            if (currentPlayingIndex !== null) {
+                stopAudio(currentPlayingIndex);
+            }
+            speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'fr-FR';
+            utterance.rate = 0.92;
+            utterance.pitch = 1.05;
+
+            const voices = speechSynthesis.getVoices();
+            const frVoice = voices.find(v => v.lang.startsWith('fr'));
+            if (frVoice) utterance.voice = frVoice;
+
+            setAudioState(index, 'playing');
+            currentPlayingIndex = index;
+            highlightScene(index);
+            currentUtterance = utterance;
+
+            utterance.onend = function() {
+                setAudioState(index, 'ready');
+                currentPlayingIndex = null;
+                currentUtterance = null;
+                if (isPlayingAll) {
+                    playAllIndex++;
+                    playNextScene();
+                }
+            };
+            utterance.onerror = function() {
+                setAudioState(index, 'error');
+                currentPlayingIndex = null;
+                currentUtterance = null;
+            };
+
+            speechSynthesis.speak(utterance);
+        }
 
         function getAudio(index) {
             if (audioElements[index]) return audioElements[index];
@@ -362,7 +429,12 @@
             }, { once: true });
 
             el.addEventListener('error', () => {
-                setAudioState(index, 'error');
+                // ElevenLabs failed — fallback to browser TTS
+                console.warn('ElevenLabs audio failed for scene ' + index + ', using browser TTS fallback');
+                ttsFailedForScene[index] = true;
+                setAudioState(index, 'ready');
+                const statusEl = document.getElementById('audio-status-' + index);
+                if (statusEl) statusEl.textContent = 'Voix navigateur — cliquer pour écouter';
             });
 
             audioElements[index] = el;
@@ -370,6 +442,12 @@
         }
 
         function stopAudio(index) {
+            // Stop browser TTS if active
+            if (ttsFailedForScene[index] || currentUtterance) {
+                speechSynthesis.cancel();
+                currentUtterance = null;
+            }
+            // Stop ElevenLabs audio
             const audio = audioElements[index];
             if (audio && !audio.paused) {
                 audio.pause();
@@ -450,51 +528,49 @@
                 video.play().catch(() => {});
             }
 
-            // Play audio (ElevenLabs)
-            const audio = getAudio(idx);
-            if (audio) {
-                if (!audio.src || audio.src === '' || audio.src === window.location.href) {
-                    const dataSrc = audio.getAttribute('data-src');
-                    if (dataSrc) {
-                        audio.src = dataSrc;
-                        audio.load();
-                    }
-                }
-                audio.currentTime = 0;
-                // Wait a moment for load if needed then play
-                const tryPlay = () => {
-                    audio.play().then(() => {
-                        setAudioState(idx, 'playing');
-                        currentPlayingIndex = idx;
-                    }).catch(() => {
-                        // If can't play audio, move to next after a delay
-                        setTimeout(() => {
-                            playAllIndex++;
-                            playNextScene();
-                        }, 3000);
-                    });
-                };
-
-                if (audio.readyState >= 2) {
-                    tryPlay();
-                } else {
-                    setAudioState(idx, 'loading');
-                    audio.addEventListener('canplaythrough', tryPlay, { once: true });
-                    // Safety timeout
-                    setTimeout(() => {
-                        if (audio.readyState < 2 && isPlayingAll && playAllIndex === idx) {
-                            tryPlay();
-                        }
-                    }, 5000);
-                }
+            // Play audio (ElevenLabs or browser TTS fallback)
+            if (ttsFailedForScene[idx]) {
+                // Use browser TTS
+                toggleBrowserTTS(idx);
             } else {
-                // No audio, wait scene duration then next
-                setTimeout(() => {
-                    if (isPlayingAll) {
-                        playAllIndex++;
-                        playNextScene();
+                const audio = getAudio(idx);
+                if (audio) {
+                    if (!audio.src || audio.src === '' || audio.src === window.location.href) {
+                        const dataSrc = audio.getAttribute('data-src');
+                        if (dataSrc) {
+                            audio.src = dataSrc;
+                            audio.load();
+                        }
                     }
-                }, 5000);
+                    audio.currentTime = 0;
+                    const tryPlay = () => {
+                        audio.play().then(() => {
+                            setAudioState(idx, 'playing');
+                            currentPlayingIndex = idx;
+                        }).catch(() => {
+                            // Fallback to browser TTS
+                            ttsFailedForScene[idx] = true;
+                            toggleBrowserTTS(idx);
+                        });
+                    };
+
+                    if (audio.readyState >= 2) {
+                        tryPlay();
+                    } else {
+                        setAudioState(idx, 'loading');
+                        audio.addEventListener('canplaythrough', tryPlay, { once: true });
+                        setTimeout(() => {
+                            if (audio.readyState < 2 && isPlayingAll && playAllIndex === idx) {
+                                // Fallback to browser TTS on timeout
+                                ttsFailedForScene[idx] = true;
+                                toggleBrowserTTS(idx);
+                            }
+                        }, 5000);
+                    }
+                } else {
+                    // No audio element, try browser TTS
+                    toggleBrowserTTS(idx);
+                }
             }
         }
 
@@ -520,6 +596,12 @@
                 icon.textContent = '▶';
                 text.textContent = 'Lecture complète';
             }
+        }
+
+        // Preload browser voices for fallback
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
         }
     })();
     </script>
