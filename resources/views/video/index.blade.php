@@ -197,7 +197,7 @@
                         </div>
                         <div class="pt-2 pb-6">
                             <p class="text-white font-medium">Génération de l'histoire</p>
-                            <p class="text-gray-500 text-sm mt-1">Claude analyse votre thème et écrit une histoire de 3 minutes</p>
+                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) analyse votre thème et écrit une histoire en 3 scènes</p>
                         </div>
                     </div>
 
@@ -215,8 +215,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Découpage en 12 scènes</p>
-                            <p class="text-gray-500 text-sm mt-1">L'histoire est découpée en scènes avec descriptions visuelles</p>
+                            <p class="text-white font-medium">Découpage en 3 scènes</p>
+                            <p class="text-gray-400 text-sm mt-1">L'histoire est découpée en scènes avec descriptions visuelles</p>
                         </div>
                     </div>
 
@@ -234,8 +234,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération de la voix (ElevenLabs)</p>
-                            <p class="text-gray-500 text-sm mt-1">Narration audio générée pour chacune des 12 scènes</p>
+                            <p class="text-white font-medium">Génération vidéo (Replicate)</p>
+                            <p class="text-gray-400 text-sm mt-1">Le modèle minimax/video-01 génère la vidéo (~3 min d'attente)</p>
                         </div>
                     </div>
 
@@ -253,8 +253,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération vidéo (Runway ML)</p>
-                            <p class="text-gray-500 text-sm mt-1">12 clips animés style cartoon générés par IA</p>
+                            <p class="text-white font-medium">Vérification de la vidéo</p>
+                            <p class="text-gray-400 text-sm mt-1">Vérification du rendu vidéo en cours (~2 min d'attente)</p>
                         </div>
                     </div>
 
@@ -271,8 +271,8 @@
                             </div>
                         </div>
                         <div class="pt-2">
-                            <p class="text-white font-medium">Assemblage final (FFmpeg)</p>
-                            <p class="text-gray-500 text-sm mt-1">Clips + audio fusionnés en une vidéo MP4 de 3 minutes</p>
+                            <p class="text-white font-medium">Assemblage final</p>
+                            <p class="text-gray-400 text-sm mt-1">Récupération de la vidéo et envoi du résultat</p>
                         </div>
                     </div>
                 </div>
@@ -294,7 +294,7 @@
 
     </div>
 
-    <footer class="mt-12 text-gray-600 text-xs text-center relative z-10">
+    <footer class="mt-12 text-gray-400 text-xs text-center relative z-10">
         Fait par Julien YILDIZ &mdash; rendu test de stage
     </footer>
 
@@ -419,11 +419,11 @@
 
             const stepMessages = [
                 'Initialisation du pipeline…',
-                'Claude écrit l\'histoire en cours…',
-                'Découpage de l\'histoire en scènes…',
-                'ElevenLabs génère la narration audio…',
-                'Runway ML génère les clips vidéo…',
-                'FFmpeg assemble la vidéo finale…',
+                'L\'IA génère l\'histoire…',
+                'Découpage en 3 scènes terminé…',
+                'Génération vidéo en cours (~3 min d\'attente)…',
+                'Vérification du rendu vidéo (~2 min)…',
+                'Assemblage final en cours…',
             ];
 
             const msgEl = document.getElementById('status-message');

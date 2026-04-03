@@ -241,7 +241,7 @@
         </div>
         @endif
 
-        <div class="mt-10 text-center text-gray-600 text-xs pb-4">
+        <div class="mt-10 text-center text-gray-400 text-xs pb-4">
             Fait par Julien YILDIZ &mdash; rendu test de stage &mdash; #{{ $project->id }}
         </div>
     </div>

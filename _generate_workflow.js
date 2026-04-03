@@ -488,7 +488,7 @@ const workflow = {
         sendBody: true,
         contentType: "raw",
         rawContentType: "application/json",
-        body: "={{ $json.callbackBody }}",
+        body: "={{ $('Prepare Callback').first().json.callbackBody }}",
         options: { timeout: 15000 }
       },
       id: "send-callback",
