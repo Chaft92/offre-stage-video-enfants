@@ -12,10 +12,7 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [
-        240,
-        400
-      ],
+      "position": [240, 400],
       "webhookId": "wh-video-pipeline-001"
     },
     {
@@ -25,32 +22,17 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
           ]
         },
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $json.body.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "1"
-            }
+            {"name": "project_id", "value": "={{ $json.body.project_id }}"},
+            {"name": "step", "value": "1"}
           ]
         },
         "options": {}
@@ -59,23 +41,17 @@
       "name": "Notify Step 1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        480,
-        400
-      ]
+      "position": [480, 400]
     },
     {
       "parameters": {
-        "jsCode": "const theme      = $('Webhook Trigger').first().json.body.theme;\nconst project_id = $('Webhook Trigger').first().json.body.project_id;\n\nconst systemPrompt = 'Tu es un auteur de livres pour enfants. Tu génères des histoires adaptées à des enfants de 8 ans.';\n\nconst userPrompt = `Génère une histoire de 3 minutes (~450 mots) sur le thème : ${theme}.\\nPuis découpe-la en 12 scènes exactement.\\nRéponds UNIQUEMENT en JSON valide avec cette structure :\\n{\\n  \"story\": \"texte complet de l'histoire\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"visual_description\": \"description pour générer l'image/vidéo en anglais, style cartoon coloré pour enfants\",\\n      \"narration\": \"texte exact à narrer pour cette scène\",\\n      \"duration_seconds\": 15\\n    }\\n  ]\\n}\\nAssure-toi que la somme des durées = 180 secondes.`;\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    claudeBody: {\n      model: 'claude-sonnet-4-5',\n      max_tokens: 4096,\n      system: systemPrompt,\n      messages: [{ role: 'user', content: userPrompt }]\n    }\n  }\n}];"
+        "jsCode": "const theme = $('Webhook Trigger').first().json.body.theme;\nconst project_id = $('Webhook Trigger').first().json.body.project_id;\n\nconst groqBody = {\n  model: 'llama-3.3-70b-versatile',\n  max_tokens: 4096,\n  messages: [\n    { role: 'system', content: \"Tu es un auteur de livres pour enfants. Tu génères des histoires adaptées à des enfants de 8 ans. Réponds UNIQUEMENT en JSON valide, sans texte avant ou après.\" },\n    { role: 'user', content: `Génère une histoire de 3 minutes (~450 mots) sur le thème : ${theme}.\\nPuis découpe-la en 12 scènes exactement.\\nRéponds UNIQUEMENT en JSON valide avec cette structure :\\n{\\n  \"story\": \"texte complet de l'histoire\",\\n  \"moral\": \"la morale\",\\n  \"scenes\": [\\n    {\\n      \"scene_number\": 1,\\n      \"visual_description\": \"description en anglais, style cartoon coloré pour enfants\",\\n      \"narration\": \"texte exact à narrer pour cette scène\",\\n      \"duration_seconds\": 15\\n    }\\n  ]\\n}\\nAssure-toi que la somme des durées = 180 secondes.` }\n  ]\n};\n\nreturn [{ json: { project_id, theme, groqBody } }];"
       },
       "id": "b2c3d4e5-f6a7-8901-b2c3-d4e5f6a7b8c9",
       "name": "Build Groq Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        720,
-        400
-      ]
+      "position": [720, 400]
     },
     {
       "parameters": {
@@ -84,14 +60,8 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $vars.GROQ_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $vars.GROQ_API_KEY }}"},
+            {"name": "Content-Type", "value": "application/json"}
           ]
         },
         "sendBody": true,
@@ -110,23 +80,17 @@
       "name": "Call Groq API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        960,
-        400
-      ]
+      "position": [960, 400]
     },
     {
       "parameters": {
-        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme      = $('Build Groq Request').first().json.theme;\nconst response   = $input.first().json;\n\nconst rawText = response.choices?.[0]?.message?.content ?? '';\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/\\s*```$/,'').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse Groq JSON response: ' + e.message + '\\nRaw: ' + rawText.slice(0, 500));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('Groq returned no valid scenes.');\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story:  parsed.story  || '',\n    moral:  parsed.moral  || '',\n    scenes: parsed.scenes,\n  }\n}];"
+        "jsCode": "const project_id = $('Build Groq Request').first().json.project_id;\nconst theme      = $('Build Groq Request').first().json.theme;\nconst response   = $input.first().json;\n\nconst rawText = response.choices?.[0]?.message?.content ?? '';\n\nlet parsed;\ntry {\n  const cleaned = rawText.replace(/^```json\\s*/i, '').replace(/\\s*```$/, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Failed to parse Groq JSON response: ' + e.message + '\\nRaw: ' + rawText.slice(0, 500));\n}\n\nif (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {\n  throw new Error('Groq returned no valid scenes.');\n}\n\nreturn [{\n  json: {\n    project_id,\n    theme,\n    story:  parsed.story  || '',\n    moral:  parsed.moral  || '',\n    scenes: parsed.scenes,\n  }\n}];"
       },
       "id": "d4e5f6a7-b8c9-0123-d4e5-f6a7b8c9d0e1",
       "name": "Parse Groq Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1200,
-        400
-      ]
+      "position": [1200, 400]
     },
     {
       "parameters": {
@@ -135,32 +99,17 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
           ]
         },
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $json.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "2"
-            }
+            {"name": "project_id", "value": "={{ $json.project_id }}"},
+            {"name": "step", "value": "2"}
           ]
         },
         "options": {}
@@ -169,10 +118,7 @@
       "name": "Notify Step 2",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1440,
-        400
-      ]
+      "position": [1440, 400]
     },
     {
       "parameters": {
@@ -183,43 +129,56 @@
       "name": "Split Into Scenes",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [
-        1680,
-        400
-      ]
+      "position": [1680, 400]
     },
     {
       "parameters": {
-        "jsCode": "const batchItem = $input.first().json;\n\nconst globalData = $('Parse Claude Response').first().json;\n\nreturn [{\n  json: {\n    project_id:          globalData.project_id,\n    story:               globalData.story,\n    moral:               globalData.moral,\n    all_scenes:          globalData.scenes,\n    scene:               batchItem,\n    scene_number:        batchItem.scene_number,\n    narration:           batchItem.narration,\n    visual_description:  batchItem.visual_description,\n    duration_seconds:    batchItem.duration_seconds,\n  }\n}];"
+        "jsCode": "const batchItem = $input.first().json;\nconst globalData = $('Parse Groq Response').first().json;\n\nreturn [{\n  json: {\n    project_id:         globalData.project_id,\n    story:              globalData.story,\n    moral:              globalData.moral,\n    all_scenes:         globalData.scenes,\n    scene:              batchItem,\n    scene_number:       batchItem.scene_number,\n    narration:          batchItem.narration,\n    visual_description: batchItem.visual_description,\n    duration_seconds:   batchItem.duration_seconds,\n  }\n}];"
       },
       "id": "prep-scene",
       "name": "Prepare Scene Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1920,
-        400
-      ]
+      "position": [1920, 400]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.elevenlabs.io/v1/text-to-speech/{{ $vars.ELEVENLABS_VOICE_ID }}",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "xi-api-key",
-              "value": "={{ $vars.ELEVENLABS_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "audio/mpeg"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {"name": "project_id", "value": "={{ $json.project_id }}"},
+            {"name": "step", "value": "3"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "step3-notify",
+      "name": "Notify Step 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.elevenlabs.io/v1/text-to-speech/' + $vars.ELEVENLABS_VOICE_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "xi-api-key", "value": "={{ $vars.ELEVENLABS_API_KEY }}"},
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "audio/mpeg"}
           ]
         },
         "sendBody": true,
@@ -239,14 +198,11 @@
       "name": "Generate Voice ElevenLabs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        2160,
-        400
-      ]
+      "position": [2400, 400]
     },
     {
       "parameters": {
-        "fileName": "=/tmp/audio_scene_{{ $('Prepare Scene Data').first().json.scene_number }}.mp3",
+        "fileName": "={{ '/tmp/audio_scene_' + $('Prepare Scene Data').first().json.scene_number + '.mp3' }}",
         "property": "audio_binary",
         "options": {}
       },
@@ -254,10 +210,35 @@
       "name": "Save Audio MP3",
       "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [
-        2400,
-        400
-      ]
+      "position": [2640, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {"name": "project_id", "value": "={{ $('Prepare Scene Data').first().json.project_id }}"},
+            {"name": "step", "value": "4"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "step4-notify",
+      "name": "Notify Step 4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 300]
     },
     {
       "parameters": {
@@ -266,14 +247,8 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $vars.REPLICATE_API_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"},
+            {"name": "Content-Type", "value": "application/json"}
           ]
         },
         "sendBody": true,
@@ -292,10 +267,7 @@
       "name": "Create Replicate Prediction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        2640,
-        400
-      ]
+      "position": [3120, 400]
     },
     {
       "parameters": {
@@ -305,24 +277,7 @@
       "name": "Store Task Info",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2880,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "passThrough",
-        "output": "input1"
-      },
-      "id": "b8c9d0e1-f2a3-4567-b8c9-d0e1f2a3b4c5",
-      "name": "Runway Poll Entry",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        3120,
-        400
-      ]
+      "position": [3360, 400]
     },
     {
       "parameters": {
@@ -333,23 +288,17 @@
       "name": "Wait 30 Seconds",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [
-        3360,
-        400
-      ],
+      "position": [3600, 400],
       "webhookId": "wait-runway-poll"
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.replicate.com/v1/predictions/{{ $json.prediction_id }}",
+        "url": "={{ 'https://api.replicate.com/v1/predictions/' + $json.prediction_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $vars.REPLICATE_API_TOKEN }}"
-            }
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"}
           ]
         },
         "options": {
@@ -364,10 +313,7 @@
       "name": "Check Replicate Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        3600,
-        400
-      ]
+      "position": [3840, 400]
     },
     {
       "parameters": {
@@ -396,10 +342,7 @@
       "name": "Is Prediction Done?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        3840,
-        400
-      ]
+      "position": [4080, 400]
     },
     {
       "parameters": {
@@ -409,10 +352,7 @@
       "name": "Extract Scene Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        4080,
-        280
-      ]
+      "position": [4320, 280]
     },
     {
       "parameters": {
@@ -422,10 +362,7 @@
       "name": "Prepare FFmpeg Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        4320,
-        400
-      ]
+      "position": [4560, 520]
     },
     {
       "parameters": {
@@ -434,32 +371,17 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
           ]
         },
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $json.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "5"
-            }
+            {"name": "project_id", "value": "={{ $json.project_id }}"},
+            {"name": "step", "value": "5"}
           ]
         },
         "options": {}
@@ -468,10 +390,7 @@
       "name": "Notify Step 5",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        4560,
-        400
-      ]
+      "position": [4800, 520]
     },
     {
       "parameters": {
@@ -480,18 +399,9 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Accept", "value": "application/json"},
+            {"name": "X-N8N-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"}
           ]
         },
         "sendBody": true,
@@ -499,387 +409,86 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({ project_id: $json.project_id, scenes_b64: $json.scenes_b64, output_path: $json.output_path, story: $json.story, all_scenes: $json.all_scenes }) }}",
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+          "timeout": 300000
         }
       },
-      "id": "b4c5d6e7-f8a9-0123-b4c5-d6e7f8a9b0c1",
-      "name": "Run FFmpeg Assembly",
+      "id": "call-assemble",
+      "name": "Call Assemble",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        4800,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const assembleResp = $input.first().json;\nconst ffmpegData   = $('Prepare FFmpeg Data').first().json;\n\nif (assembleResp.error) {\n  throw new Error('Assemble endpoint error: ' + assembleResp.error);\n}\n\nconst videoUrl = assembleResp.video_url || ('/storage/videos/' + ffmpegData.project_id + '.mp4');\n\nreturn [{\n  json: {\n    project_id:  ffmpegData.project_id,\n    video_url:   videoUrl,\n    story_text:  ffmpegData.story,\n    scenes_json: ffmpegData.all_scenes,\n  }\n}];"
-      },
-      "id": "prep-callback",
-      "name": "Prepare Callback Payload",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        5040,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/callback",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ project_id: $json.project_id, video_url: $json.video_url, story_text: $json.story_text, scenes_json: $json.scenes_json }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "c5d6e7f8-a9b0-1234-c5d6-e7f8a9b0c1d2",
-      "name": "Laravel Callback Success",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        5280,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/error",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ project_id: $('Webhook Trigger').first().json.body.project_id, error_message: $json.message || $json.error || 'Erreur inconnue dans le pipeline N8N' }) }}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "error-handler",
-      "name": "Error Handler",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2160,
-        700
-      ]
+      "position": [5040, 520]
     }
   ],
   "connections": {
     "Webhook Trigger": {
-      "main": [
-        [
-          {
-            "node": "Notify Step 1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Step 1", "type": "main", "index": 0}]]
     },
     "Notify Step 1": {
-      "main": [
-        [
-          {
-            "node": "Build Groq Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Build Groq Request", "type": "main", "index": 0}]]
     },
     "Build Groq Request": {
-      "main": [
-        [
-          {
-            "node": "Call Groq API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Call Groq API", "type": "main", "index": 0}]]
     },
     "Call Groq API": {
-      "main": [
-        [
-          {
-            "node": "Parse Groq Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Parse Groq Response", "type": "main", "index": 0}]]
     },
     "Parse Groq Response": {
-      "main": [
-        [
-          {
-            "node": "Notify Step 2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Step 2", "type": "main", "index": 0}]]
     },
     "Notify Step 2": {
-      "main": [
-        [
-          {
-            "node": "Split Into Scenes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Split Into Scenes", "type": "main", "index": 0}]]
     },
     "Split Into Scenes": {
       "main": [
-        [
-          {
-            "node": "Prepare Scene Data",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Prepare FFmpeg Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{"node": "Prepare Scene Data", "type": "main", "index": 0}],
+        [{"node": "Prepare FFmpeg Data", "type": "main", "index": 0}]
       ]
     },
     "Prepare Scene Data": {
-      "main": [
-        [
-          {
-            "node": "Generate Voice ElevenLabs",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Step 3", "type": "main", "index": 0}]]
+    },
+    "Notify Step 3": {
+      "main": [[{"node": "Generate Voice ElevenLabs", "type": "main", "index": 0}]]
     },
     "Generate Voice ElevenLabs": {
-      "main": [
-        [
-          {
-            "node": "Save Audio MP3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Save Audio MP3", "type": "main", "index": 0}]]
     },
     "Save Audio MP3": {
-      "main": [
-        [
-          {
-            "node": "Create Runway Task",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Step 4", "type": "main", "index": 0}]]
+    },
+    "Notify Step 4": {
+      "main": [[{"node": "Create Replicate Prediction", "type": "main", "index": 0}]]
     },
     "Create Replicate Prediction": {
-      "main": [
-        [
-          {
-            "node": "Store Task Info",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Store Task Info", "type": "main", "index": 0}]]
     },
     "Store Task Info": {
-      "main": [
-        [
-          {
-            "node": "Runway Poll Entry",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Runway Poll Entry": {
-      "main": [
-        [
-          {
-            "node": "Wait 30 Seconds",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Wait 30 Seconds", "type": "main", "index": 0}]]
     },
     "Wait 30 Seconds": {
-      "main": [
-        [
-          {
-            "node": "Check Replicate Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Check Replicate Status", "type": "main", "index": 0}]]
     },
     "Check Replicate Status": {
-      "main": [
-        [
-          {
-            "node": "Is Prediction Done?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Is Prediction Done?", "type": "main", "index": 0}]]
     },
     "Is Prediction Done?": {
       "main": [
-        [
-          {
-            "node": "Extract Scene Result",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Runway Poll Entry",
-            "type": "main",
-            "index": 1
-          }
-        ]
+        [{"node": "Extract Scene Result", "type": "main", "index": 0}],
+        [{"node": "Wait 30 Seconds", "type": "main", "index": 0}]
       ]
     },
     "Extract Scene Result": {
-      "main": [
-        [
-          {
-            "node": "Split Into Scenes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Split Into Scenes", "type": "main", "index": 0}]]
     },
     "Prepare FFmpeg Data": {
-      "main": [
-        [
-          {
-            "node": "Notify Step 5",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Notify Step 5", "type": "main", "index": 0}]]
     },
     "Notify Step 5": {
-      "main": [
-        [
-          {
-            "node": "Run FFmpeg Assembly",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Run FFmpeg Assembly": {
-      "main": [
-        [
-          {
-            "node": "Prepare Callback Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Callback Payload": {
-      "main": [
-        [
-          {
-            "node": "Laravel Callback Success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Call Assemble", "type": "main", "index": 0}]]
     }
   },
-  "pinData": {},
   "active": false,
   "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner",
-    "errorWorkflow": ""
-  },
-  "versionId": "v1-video-pipeline-2024",
-  "meta": {
-    "templateCredsSetupCompleted": false,
-    "instanceId": "00000000000000000000000000000001"
-  },
-  "id": "VIDEO_PIPELINE_V1",
-  "tags": [
-    {
-      "createdAt": "2024-01-01T00:00:00.000Z",
-      "updatedAt": "2024-01-01T00:00:00.000Z",
-      "id": "tag_video_gen",
-      "name": "video-generation"
-    }
-  ]
+    "executionOrder": "v1"
+  }
 }
