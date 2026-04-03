@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Trust all proxies — required for Railway (HTTPS termination at proxy level)
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'n8n.secret' => \App\Http\Middleware\VerifyN8nWebhookSecret::class,
         ]);

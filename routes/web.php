@@ -3,7 +3,8 @@
 use App\Http\Controllers\VideoController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect()->route('video.index'));
+// Route::redirect serializes correctly (no closure), works with route:cache
+Route::redirect('/', '/video');
 
 Route::get('/video', [VideoController::class, 'index'])->name('video.index');
 
