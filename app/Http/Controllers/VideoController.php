@@ -76,6 +76,8 @@ class VideoController extends Controller
                 'success'    => false,
                 'project_id' => $project->id,
                 'message'    => 'Impossible de contacter le pipeline. Réessayez dans quelques instants.',
+                'debug'      => $e->getMessage(),
+                'webhook'    => config('services.n8n.webhook_url'),
             ], 502);
         }
 
