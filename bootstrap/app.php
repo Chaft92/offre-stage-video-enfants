@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\URL;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,6 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         // Trust all proxies — required for Railway (HTTPS termination at proxy level)
         $middleware->trustProxies(at: '*');
+
+        // Force HTTPS in production (Railway terminates SSL at proxy)
+        if (env('APP_ENV') === 'production') {
+            URL::forceScheme('https');
+        }
 
         $middleware->alias([
             'n8n.secret' => \App\Http\Middleware\VerifyN8nWebhookSecret::class,
