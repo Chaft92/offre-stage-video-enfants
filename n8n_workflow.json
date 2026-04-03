@@ -1,22 +1,22 @@
 {
-  "name": "Video Pipeline v9 — 12 Scenes + SplitInBatches",
+  "name": "AI Kids Video Generator v10",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "video-pipeline",
-        "responseMode": "onReceived",
+        "responseMode": "lastNode",
         "options": {}
       },
       "id": "webhook-trigger",
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
+      "typeVersion": 2,
       "position": [
-        240,
+        260,
         400
       ],
-      "webhookId": "wh-video-pipeline-001"
+      "webhookId": "video-pipeline"
     },
     {
       "parameters": {
@@ -62,7 +62,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        460,
+        480,
         400
       ],
       "onError": "continueRegularOutput"
@@ -76,7 +76,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        700,
         400
       ]
     },
@@ -94,10 +94,6 @@
             {
               "name": "Content-Type",
               "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
             }
           ]
         },
@@ -114,7 +110,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        900,
+        920,
         400
       ]
     },
@@ -127,7 +123,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
+        1140,
         400
       ]
     },
@@ -175,393 +171,23 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1340,
+        1360,
         400
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "var data = $('Parse Story').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.scenes.length; i++) {\n  var sc = data.scenes[i];\n  items.push({\n    json: {\n      project_id: data.project_id,\n      scene_index: i,\n      scene_number: sc.scene_number,\n      prompt: sc.visual_description + '. Cartoon style animation for children, bright colors, child-friendly, smooth animation, high quality, 5 seconds.'\n    }\n  });\n}\n\nreturn items;"
-      },
-      "id": "split-scenes",
-      "name": "Split Scenes",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1560,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "batch-create",
-      "name": "Batch Create",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        1780,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.replicate.com/v1/models/minimax/video-01/predictions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ input: { prompt: $json.prompt, prompt_optimizer: true } }) }}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "create-prediction",
-      "name": "Create Prediction",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2000,
-        600
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.id) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar createItems = $input.all();\nvar predictionUrls = [];\nvar debugInfo = [];\n\nfor (var i = 0; i < createItems.length; i++) {\n  var raw = createItems[i].json;\n  var p = parseResp(raw);\n  debugInfo.push('item' + i + ':id=' + (p ? p.id : 'null') + ',status=' + (p ? p.status : 'null'));\n  if (p && p.id) {\n    predictionUrls.push((p.urls && p.urls.get) ? p.urls.get : 'https://api.replicate.com/v1/predictions/' + p.id);\n  } else {\n    predictionUrls.push('');\n  }\n}\n\nreturn [{ json: {\n  project_id: storyData.project_id,\n  prediction_urls: predictionUrls,\n  scene_count: storyData.scenes.length,\n  debug: 'Created ' + createItems.length + ' predictions: ' + debugInfo.join('; ')\n} }];"
-      },
-      "id": "collect-predictions",
-      "name": "Collect Predictions",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $json.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "3"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "id": "step3",
-      "name": "Notify Step 3",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2220,
-        400
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "amount": 5,
-        "unit": "minutes"
-      },
-      "id": "wait-5min",
-      "name": "Wait 5min",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        2440,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "var data = $('Collect Predictions').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.prediction_urls.length; i++) {\n  if (data.prediction_urls[i]) {\n    items.push({\n      json: {\n        poll_url: data.prediction_urls[i],\n        scene_index: i,\n        project_id: data.project_id\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  items.push({ json: { poll_url: 'https://api.replicate.com/v1/predictions/none', scene_index: -1, project_id: data.project_id } });\n}\n\nreturn items;"
-      },
-      "id": "split-poll",
-      "name": "Split for Poll",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2660,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "batch-poll",
-      "name": "Batch Poll",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        2880,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $json.poll_url }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "poll-prediction",
-      "name": "Poll Prediction",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3100,
-        600
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $('Collect Predictions').first().json.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "4"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "id": "step4",
-      "name": "Notify Step 4",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3100,
-        400
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "amount": 3,
-        "unit": "minutes"
-      },
-      "id": "wait-3min",
-      "name": "Wait 3min",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        3320,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "var data = $('Collect Predictions').first().json;\nvar items = [];\n\nfor (var i = 0; i < data.prediction_urls.length; i++) {\n  if (data.prediction_urls[i]) {\n    items.push({\n      json: {\n        poll_url: data.prediction_urls[i],\n        scene_index: i,\n        project_id: data.project_id\n      }\n    });\n  }\n}\n\nif (items.length === 0) {\n  items.push({ json: { poll_url: 'https://api.replicate.com/v1/predictions/none', scene_index: -1, project_id: data.project_id } });\n}\n\nreturn items;"
-      },
-      "id": "split-poll-2",
-      "name": "Split for Poll 2",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3540,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "batch-poll-2",
-      "name": "Batch Poll 2",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        3760,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $json.poll_url }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $vars.REPLICATE_API_TOKEN }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "poll-final",
-      "name": "Poll Final",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3980,
-        600
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "var storyData = $('Parse Story').first().json;\n\nfunction findBufferBytes(obj, depth) {\n  if (!obj || typeof obj !== 'object' || depth > 6) return null;\n  if (obj.type === 'Buffer' && Array.isArray(obj.data)) return obj.data;\n  var keys = Object.keys(obj);\n  for (var i = 0; i < keys.length; i++) {\n    var found = findBufferBytes(obj[keys[i]], depth + 1);\n    if (found) return found;\n  }\n  return null;\n}\n\nfunction parseResp(input) {\n  if (!input) return null;\n  if (input.status) return input;\n  if (typeof input.data === 'string') { try { return JSON.parse(input.data); } catch(e) {} }\n  var bytes = findBufferBytes(input, 0);\n  if (bytes && bytes.length > 0) { try { return JSON.parse(Buffer.from(bytes).toString('utf-8')); } catch(e) {} }\n  return input;\n}\n\nvar videoUrls = {};\n\n// $input.all() receives all items from the SplitInBatches done output\nvar items = $input.all();\nfor (var i = 0; i < items.length; i++) {\n  var sceneIdx = items[i].json.scene_index;\n  if (sceneIdx === undefined) sceneIdx = i;\n  if (videoUrls[sceneIdx]) continue;\n\n  var p = parseResp(items[i].json);\n  if (p && p.status === 'succeeded' && p.output) {\n    var out = p.output;\n    if (typeof out === 'string' && out.startsWith('http')) videoUrls[sceneIdx] = out;\n    else if (Array.isArray(out) && out.length > 0 && typeof out[0] === 'string') videoUrls[sceneIdx] = out[0];\n  }\n}\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    video_url: videoUrls[s] || ''\n  });\n}\n\nvar mainVideoUrl = '';\nfor (var k in videoUrls) {\n  if (videoUrls[k]) { mainVideoUrl = videoUrls[k]; break; }\n}\nif (!mainVideoUrl) mainVideoUrl = 'https://demo-video-placeholder.example.com/video.mp4';\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: mainVideoUrl,\n  story_text: storyData.story,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
+        "jsCode": "var storyData = $('Parse Story').first().json;\n\nvar scenes = [];\nfor (var s = 0; s < storyData.scenes.length; s++) {\n  var sc = storyData.scenes[s];\n  scenes.push({\n    scene_number: sc.scene_number,\n    visual_description: sc.visual_description,\n    narration: sc.narration,\n    duration_seconds: sc.duration_seconds,\n    video_url: ''\n  });\n}\n\nvar callbackBody = JSON.stringify({\n  project_id: storyData.project_id,\n  video_url: 'pending',\n  story_text: storyData.story,\n  scenes_json: scenes\n});\n\nreturn [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];"
       },
       "id": "prepare-callback",
       "name": "Prepare Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3980,
+        1580,
         400
       ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.LARAVEL_URL }}/api/n8n/step",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            },
-            {
-              "name": "X-N8N-Secret",
-              "value": "={{ $vars.N8N_WEBHOOK_SECRET }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "project_id",
-              "value": "={{ $json.project_id }}"
-            },
-            {
-              "name": "step",
-              "value": "5"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "id": "step5",
-      "name": "Notify Step 5",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        4200,
-        400
-      ],
-      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -587,9 +213,9 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ $('Prepare Callback').first().json.callbackBody }}",
+        "body": "={{ $json.callbackBody }}",
         "options": {
-          "timeout": 15000
+          "timeout": 120000
         }
       },
       "id": "send-callback",
@@ -597,7 +223,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4420,
+        1800,
         400
       ]
     }
@@ -662,170 +288,6 @@
       "main": [
         [
           {
-            "node": "Split Scenes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Scenes": {
-      "main": [
-        [
-          {
-            "node": "Batch Create",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Batch Create": {
-      "main": [
-        [
-          {
-            "node": "Create Prediction",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Collect Predictions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Create Prediction": {
-      "main": [
-        [
-          {
-            "node": "Batch Create",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Collect Predictions": {
-      "main": [
-        [
-          {
-            "node": "Notify Step 3",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify Step 3": {
-      "main": [
-        [
-          {
-            "node": "Wait 5min",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait 5min": {
-      "main": [
-        [
-          {
-            "node": "Split for Poll",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split for Poll": {
-      "main": [
-        [
-          {
-            "node": "Batch Poll",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Batch Poll": {
-      "main": [
-        [
-          {
-            "node": "Poll Prediction",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Notify Step 4",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Poll Prediction": {
-      "main": [
-        [
-          {
-            "node": "Batch Poll",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify Step 4": {
-      "main": [
-        [
-          {
-            "node": "Wait 3min",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait 3min": {
-      "main": [
-        [
-          {
-            "node": "Split for Poll 2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split for Poll 2": {
-      "main": [
-        [
-          {
-            "node": "Batch Poll 2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Batch Poll 2": {
-      "main": [
-        [
-          {
-            "node": "Poll Final",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Prepare Callback",
             "type": "main",
             "index": 0
@@ -833,29 +295,7 @@
         ]
       ]
     },
-    "Poll Final": {
-      "main": [
-        [
-          {
-            "node": "Batch Poll 2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Prepare Callback": {
-      "main": [
-        [
-          {
-            "node": "Notify Step 5",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Notify Step 5": {
       "main": [
         [
           {

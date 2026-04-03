@@ -54,9 +54,9 @@ class VideoProject extends Model
         return match ($this->current_step) {
             1       => "Génération de l'histoire (Groq)",
             2       => 'Découpage en 12 scènes',
-            3       => 'Génération des 12 vidéos (Replicate)',
-            4       => 'Vérification des vidéos',
-            5       => 'Assemblage final + voix ElevenLabs',
+            3       => 'Lancement des vidéos (Replicate)',
+            4       => 'Vidéos en cours de génération...',
+            5       => 'Terminé — vidéos + voix ElevenLabs',
             default => 'En attente de démarrage',
         };
     }

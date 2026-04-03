@@ -120,12 +120,14 @@
         <div class="mb-8 fade-in-up" style="animation-delay:0.1s">
             @php
                 $anyVideo = false;
+                $pendingCount = 0;
                 if ($project->scenes_json) {
                     foreach ($project->scenes_json as $sc) {
                         if (!empty($sc['video_url']) && filter_var($sc['video_url'], FILTER_VALIDATE_URL)
                             && !str_contains($sc['video_url'], 'placeholder')) {
                             $anyVideo = true;
-                            break;
+                        } elseif (!empty($sc['prediction_id'])) {
+                            $pendingCount++;
                         }
                     }
                 }
@@ -133,17 +135,31 @@
                     $anyVideo = $project->video_url
                         && !str_contains($project->video_url, 'placeholder')
                         && !str_contains($project->video_url, 'demo-mode')
+                        && !str_contains($project->video_url, 'pending')
                         && filter_var($project->video_url, FILTER_VALIDATE_URL);
                 }
             @endphp
 
-            @if(!$anyVideo)
+            @if($pendingCount > 0)
+            <div id="video-progress-banner" class="card-glass rounded-2xl p-8 text-center mb-5">
+                <span class="text-5xl mb-4 inline-block">🎬</span>
+                <h3 class="text-white text-lg font-semibold mb-2">Vidéos en cours de génération...</h3>
+                <p class="text-gray-400 text-sm mb-4">
+                    Les vidéos sont générées par Replicate. Cela peut prendre 3 à 5 minutes.
+                </p>
+                <div class="w-full bg-purple-900/30 rounded-full h-3 mb-3">
+                    <div id="video-gen-progress" class="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <p id="video-gen-status" class="text-purple-300 text-sm font-medium">
+                    0 / {{ count($project->scenes_json) }} vidéos prêtes
+                </p>
+            </div>
+            @elseif(!$anyVideo)
             <div class="card-glass rounded-2xl p-8 text-center mb-5">
                 <span class="text-5xl mb-4 inline-block">🎥</span>
                 <h3 class="text-white text-lg font-semibold mb-2">Pipeline terminé avec succès !</h3>
                 <p class="text-gray-400 text-sm mb-3">
-                    L'histoire et les scènes ont été générées. Les vidéos seront disponibles
-                    lorsque le pipeline vidéo (Replicate) sera activé.
+                    L'histoire et les scènes ont été générées.
                 </p>
                 <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -602,6 +618,79 @@
         if ('speechSynthesis' in window) {
             speechSynthesis.getVoices();
             speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+        }
+
+        // ─── Video generation polling ───
+        const PENDING_VIDEOS = {{ $pendingCount ?? 0 }};
+        if (PENDING_VIDEOS > 0) {
+            let pollInterval = null;
+            let pollCount = 0;
+            const MAX_POLLS = 40; // ~10 minutes at 15s intervals
+
+            function pollVideos() {
+                pollCount++;
+                if (pollCount > MAX_POLLS) {
+                    clearInterval(pollInterval);
+                    const banner = document.getElementById('video-progress-banner');
+                    if (banner) {
+                        banner.innerHTML = '<span class="text-5xl mb-4 inline-block">⏱️</span>' +
+                            '<h3 class="text-white text-lg font-semibold mb-2">Génération plus longue que prévu</h3>' +
+                            '<p class="text-gray-400 text-sm">Rafraîchissez la page dans quelques minutes.</p>';
+                    }
+                    return;
+                }
+
+                fetch('/video/{{ $project->id }}/check-videos')
+                    .then(r => r.json())
+                    .then(data => {
+                        const pct = data.total > 0 ? Math.round((data.ready / data.total) * 100) : 0;
+                        const bar = document.getElementById('video-gen-progress');
+                        const status = document.getElementById('video-gen-status');
+
+                        if (bar) bar.style.width = pct + '%';
+                        if (status) status.textContent = data.ready + ' / ' + data.total + ' vidéos prêtes';
+
+                        // Dynamically add video players for completed scenes
+                        if (data.scenes) {
+                            data.scenes.forEach((scene, idx) => {
+                                const url = scene.video_url || '';
+                                if (url && url.startsWith('http') && !document.getElementById('video-' + idx)) {
+                                    const card = document.getElementById('scene-card-' + idx);
+                                    if (card) {
+                                        const header = card.querySelector('.p-5.border-b');
+                                        if (header) {
+                                            const videoDiv = document.createElement('div');
+                                            videoDiv.className = 'bg-black';
+                                            videoDiv.innerHTML = '<video id="video-' + idx + '" controls preload="metadata" class="w-full" style="max-height:360px">' +
+                                                '<source src="' + url + '" type="video/mp4"></video>';
+                                            header.after(videoDiv);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+
+                        if (data.all_done) {
+                            clearInterval(pollInterval);
+                            const banner = document.getElementById('video-progress-banner');
+                            if (banner) {
+                                banner.innerHTML = '<span class="text-5xl mb-4 inline-block">🎉</span>' +
+                                    '<h3 class="text-white text-lg font-semibold mb-2">Toutes les vidéos sont prêtes !</h3>' +
+                                    '<p class="text-gray-400 text-sm mb-3">' + data.ready + ' vidéos générées avec succès.</p>' +
+                                    '<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">' +
+                                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' +
+                                    'Vidéos + histoire complètes</div>';
+                            }
+                        }
+                    })
+                    .catch(err => console.warn('Poll error:', err));
+            }
+
+            // Start polling after 30 seconds (give Replicate time to start)
+            setTimeout(() => {
+                pollVideos(); // First poll immediately
+                pollInterval = setInterval(pollVideos, 15000);
+            }, 30000);
         }
     })();
     </script>

@@ -189,6 +189,93 @@ class VideoController extends Controller
     }
 
     /**
+     * Poll Replicate for video status and update scenes when ready.
+     */
+    public function checkVideos(int $id): JsonResponse
+    {
+        $project = VideoProject::findOrFail($id);
+        $scenes = $project->scenes_json ?? [];
+        $updated = false;
+        $ready = 0;
+        $failed = 0;
+        $total = count($scenes);
+
+        $apiToken = config('services.replicate.api_key');
+
+        foreach ($scenes as $i => &$scene) {
+            $videoUrl = $scene['video_url'] ?? '';
+
+            // Already has a valid video URL
+            if ($videoUrl && filter_var($videoUrl, FILTER_VALIDATE_URL)) {
+                $ready++;
+                continue;
+            }
+
+            // Already marked as failed
+            if ($videoUrl === 'failed') {
+                $failed++;
+                continue;
+            }
+
+            // No prediction to poll
+            $predUrl = $scene['prediction_url'] ?? '';
+            if (empty($predUrl) || empty($apiToken)) {
+                continue;
+            }
+
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $apiToken,
+                ])->timeout(10)->get($predUrl);
+
+                if ($response->successful()) {
+                    $pred = $response->json();
+
+                    if (($pred['status'] ?? '') === 'succeeded' && !empty($pred['output'])) {
+                        $output = $pred['output'];
+                        $scene['video_url'] = is_array($output) ? $output[0] : $output;
+                        $updated = true;
+                        $ready++;
+                    } elseif (in_array($pred['status'] ?? '', ['failed', 'canceled'])) {
+                        $scene['video_url'] = 'failed';
+                        $updated = true;
+                        $failed++;
+                    }
+                    // else still processing — leave as is
+                }
+            } catch (\Exception $e) {
+                Log::warning("checkVideos #{$id} scene {$i}: {$e->getMessage()}");
+            }
+        }
+
+        if ($updated) {
+            // Update main video_url with the first available video
+            $mainVideoUrl = 'pending';
+            foreach ($scenes as $sc) {
+                $v = $sc['video_url'] ?? '';
+                if ($v && filter_var($v, FILTER_VALIDATE_URL)) {
+                    $mainVideoUrl = $v;
+                    break;
+                }
+            }
+
+            $updateData = ['scenes_json' => $scenes, 'video_url' => $mainVideoUrl];
+            if ($ready >= $total || ($ready + $failed) >= $total) {
+                $updateData['current_step'] = 5;
+            }
+            $project->update($updateData);
+        }
+
+        return response()->json([
+            'ready'    => $ready,
+            'failed'   => $failed,
+            'total'    => $total,
+            'all_done' => ($ready + $failed) >= $total,
+            'scenes'   => $scenes,
+        ]);
+    }
+
+    /**
      * ElevenLabs TTS proxy — generates audio for a given scene's narration.
      * Caches in storage/app/tts/ to avoid re-calling the API on page refresh.
      */
