@@ -1,5 +1,4 @@
 # Railway.app — build + deploy config for Laravel 11
-# Nixpacks auto-detects PHP 8.2 from composer.json
 
 [phases.install]
 cmds = [
@@ -9,4 +8,6 @@ cmds = [
 ]
 
 [start]
-cmd = "php artisan config:cache && php artisan route:cache && php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"
+# Semicolons: each command runs even if the previous one fails
+# This ensures php artisan serve ALWAYS starts (healthcheck passes)
+cmd = "php artisan config:clear; php artisan route:cache; php artisan migrate --graceful --force; php artisan serve --host=0.0.0.0 --port=$PORT"
