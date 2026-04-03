@@ -87,7 +87,7 @@
         }
     </style>
 </head>
-<body class="gradient-bg min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
+<body class="gradient-bg min-h-screen flex flex-col items-center justify-center p-4 relative overflow-x-hidden">
 
     <div class="particle w-64 h-64 bg-purple-600 top-10 left-10" style="animation-delay:0s"></div>
     <div class="particle w-48 h-48 bg-indigo-500 bottom-20 right-20" style="animation-delay:3s"></div>
@@ -235,7 +235,7 @@
                         </div>
                         <div class="pt-2 pb-6">
                             <p class="text-white font-medium">Génération vidéo (Replicate)</p>
-                            <p class="text-gray-400 text-sm mt-1">Le modèle minimax/video-01 génère la vidéo (~3 min d'attente)</p>
+                            <p class="text-gray-400 text-sm mt-1">3 clips vidéo générés par minimax/video-01 (~4 min d'attente)</p>
                         </div>
                     </div>
 

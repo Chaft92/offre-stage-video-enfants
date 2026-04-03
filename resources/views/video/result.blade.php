@@ -87,7 +87,7 @@
         ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 3px; }
     </style>
 </head>
-<body class="gradient-bg min-h-screen py-10 px-4 relative overflow-hidden">
+<body class="gradient-bg min-h-screen py-10 px-4 relative overflow-x-hidden">
 
     <div class="max-w-4xl mx-auto relative z-10">
 
@@ -116,29 +116,30 @@
 
         <div class="mb-8 fade-in-up" style="animation-delay:0.1s">
             @php
-                $hasVideo = $project->video_url
-                    && !str_contains($project->video_url, 'placeholder')
-                    && !str_contains($project->video_url, 'demo-mode')
-                    && filter_var($project->video_url, FILTER_VALIDATE_URL);
+                $anyVideo = false;
+                if ($project->scenes_json) {
+                    foreach ($project->scenes_json as $sc) {
+                        if (!empty($sc['video_url']) && filter_var($sc['video_url'], FILTER_VALIDATE_URL)
+                            && !str_contains($sc['video_url'], 'placeholder')) {
+                            $anyVideo = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$anyVideo) {
+                    $anyVideo = $project->video_url
+                        && !str_contains($project->video_url, 'placeholder')
+                        && !str_contains($project->video_url, 'demo-mode')
+                        && filter_var($project->video_url, FILTER_VALIDATE_URL);
+                }
             @endphp
 
-            @if($hasVideo)
-            <div class="video-wrapper">
-                <video
-                    controls
-                    preload="metadata"
-                    poster=""
-                    id="main-video">
-                    <source src="{{ $project->video_url }}" type="video/mp4">
-                    Votre navigateur ne supporte pas la lecture vidéo HTML5.
-                </video>
-            </div>
-            @else
-            <div class="card-glass rounded-2xl p-8 text-center">
+            @if(!$anyVideo)
+            <div class="card-glass rounded-2xl p-8 text-center mb-5">
                 <span class="text-5xl mb-4 inline-block">🎥</span>
                 <h3 class="text-white text-lg font-semibold mb-2">Pipeline terminé avec succès !</h3>
                 <p class="text-gray-400 text-sm mb-3">
-                    L'histoire et les scènes ont été générées. La vidéo complète sera disponible
+                    L'histoire et les scènes ont été générées. Les vidéos seront disponibles
                     lorsque le pipeline vidéo (Replicate) sera activé.
                 </p>
                 <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-900/30 border border-green-500/30 text-green-300 text-sm">
@@ -151,19 +152,7 @@
             @endif
 
             {{-- Boutons d'action --}}
-            <div class="flex flex-col sm:flex-row gap-4 mt-5">
-                @if($hasVideo)
-                <a
-                    href="{{ $project->video_url }}"
-                    download="video_{{ $project->id }}_{{ Str::slug($project->theme, '_') }}.mp4"
-                    class="btn-download flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                    </svg>
-                    Télécharger la vidéo
-                </a>
-                @endif
+            <div class="flex flex-col sm:flex-row gap-4">
                 <a
                     href="{{ route('video.index') }}"
                     class="btn-primary flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
@@ -206,10 +195,17 @@
                 Les {{ count($project->scenes_json) }} scènes
             </h2>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-6">
                 @foreach($project->scenes_json as $scene)
-                <div class="scene-card p-5">
-                    <div class="flex items-center justify-between mb-3">
+                @php
+                    $sceneVideoUrl = $scene['video_url'] ?? '';
+                    $hasSceneVideo = $sceneVideoUrl
+                        && !str_contains($sceneVideoUrl, 'placeholder')
+                        && filter_var($sceneVideoUrl, FILTER_VALIDATE_URL);
+                @endphp
+                <div class="scene-card overflow-hidden">
+                    {{-- Scene header --}}
+                    <div class="p-5 border-b border-white/5 flex items-center justify-between">
                         <div class="scene-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-purple-300">
                             Scène {{ $scene['scene_number'] ?? ($loop->index + 1) }}
                         </div>
@@ -218,23 +214,42 @@
                         </span>
                     </div>
 
-                    @if(!empty($scene['visual_description']))
-                    <div class="mb-3">
-                        <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Visuel</p>
-                        <p class="text-gray-400 text-xs leading-relaxed italic">
-                            {{ $scene['visual_description'] }}
-                        </p>
+                    {{-- Video player per scene --}}
+                    @if($hasSceneVideo)
+                    <div class="bg-black">
+                        <video controls preload="metadata" class="w-full" style="max-height: 360px">
+                            <source src="{{ $sceneVideoUrl }}" type="video/mp4">
+                        </video>
                     </div>
                     @endif
 
-                    @if(!empty($scene['narration']))
-                    <div>
-                        <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Narration</p>
-                        <p class="text-gray-200 text-sm leading-relaxed">
-                            {{ $scene['narration'] }}
-                        </p>
+                    <div class="p-5">
+                        @if(!empty($scene['visual_description']))
+                        <div class="mb-3">
+                            <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Visuel</p>
+                            <p class="text-gray-400 text-xs leading-relaxed italic">
+                                {{ $scene['visual_description'] }}
+                            </p>
+                        </div>
+                        @endif
+
+                        @if(!empty($scene['narration']))
+                        <div class="mb-3">
+                            <p class="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">Narration</p>
+                            <p class="text-gray-200 text-sm leading-relaxed">
+                                {{ $scene['narration'] }}
+                            </p>
+                        </div>
+
+                        {{-- TTS button --}}
+                        <button
+                            onclick="toggleSpeech(this, {{ $loop->index }})"
+                            class="tts-btn inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-900/30 border border-purple-500/30 text-purple-300 text-sm hover:bg-purple-900/50 transition-all cursor-pointer">
+                            <span class="tts-icon">🔊</span>
+                            <span class="tts-label">Lire la narration</span>
+                        </button>
+                        @endif
                     </div>
-                    @endif
                 </div>
                 @endforeach
             </div>
@@ -246,5 +261,71 @@
         </div>
     </div>
 
+    <script>
+    (function() {
+        'use strict';
+
+        // Narration texts for TTS
+        const sceneTexts = @json(collect($project->scenes_json ?? [])->pluck('narration')->toArray());
+
+        let currentUtterance = null;
+        let currentBtn = null;
+
+        window.toggleSpeech = function(btn, index) {
+            if (!('speechSynthesis' in window)) {
+                alert('Votre navigateur ne supporte pas la synthèse vocale.');
+                return;
+            }
+
+            const text = sceneTexts[index] || '';
+            if (!text) return;
+
+            // If same button is playing, stop it
+            if (currentBtn === btn && speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                resetBtn(btn);
+                currentBtn = null;
+                return;
+            }
+
+            // Stop any current speech
+            speechSynthesis.cancel();
+            if (currentBtn) resetBtn(currentBtn);
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'fr-FR';
+            utterance.rate = 0.92;
+            utterance.pitch = 1.05;
+
+            // Try to find a French voice
+            const voices = speechSynthesis.getVoices();
+            const frVoice = voices.find(v => v.lang.startsWith('fr'));
+            if (frVoice) utterance.voice = frVoice;
+
+            btn.querySelector('.tts-icon').textContent = '⏹️';
+            btn.querySelector('.tts-label').textContent = 'Arrêter';
+            btn.classList.add('bg-purple-800/50', 'border-purple-400/50');
+            currentBtn = btn;
+
+            utterance.onend = function() { resetBtn(btn); currentBtn = null; };
+            utterance.onerror = function() { resetBtn(btn); currentBtn = null; };
+
+            speechSynthesis.speak(utterance);
+        };
+
+        function resetBtn(btn) {
+            if (!btn) return;
+            btn.querySelector('.tts-icon').textContent = '🔊';
+            btn.querySelector('.tts-label').textContent = 'Lire la narration';
+            btn.classList.remove('bg-purple-800/50', 'border-purple-400/50');
+        }
+
+        // Preload voices (some browsers need this)
+        if ('speechSynthesis' in window) {
+            speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = function() { speechSynthesis.getVoices(); };
+        }
+    })();
+    </script>
 </body>
 </html>

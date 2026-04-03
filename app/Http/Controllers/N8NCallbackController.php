@@ -20,6 +20,7 @@ class N8NCallbackController extends Controller
             'scenes_json.*.narration'          => ['required', 'string'],
             'scenes_json.*.visual_description' => ['required', 'string'],
             'scenes_json.*.duration_seconds'   => ['required', 'integer', 'min:1', 'max:60'],
+            'scenes_json.*.video_url'          => ['nullable', 'string', 'max:1000'],
         ]);
 
         $project = VideoProject::findOrFail($data['project_id']);
