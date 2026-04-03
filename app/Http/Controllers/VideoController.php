@@ -49,9 +49,9 @@ class VideoController extends Controller
             ->post($webhookUrl, [
                 'project_id'   => $project->id,
                 'theme'        => $project->theme,
-                'callback_url' => route('n8n.callback'),
-                'error_url'    => route('n8n.error'),
-                'step_url'     => route('n8n.step'),
+                'callback_url' => route('n8n.callback', absolute: true),
+                'error_url'    => route('n8n.error', absolute: true),
+                'step_url'     => route('n8n.step', absolute: true),
             ]);
 
             if ($response->failed()) {
