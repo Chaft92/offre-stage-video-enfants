@@ -13,7 +13,16 @@
         body { font-family: 'Inter', sans-serif; }
 
         .gradient-bg {
-            background: linear-gradient(135deg, #0a0618 0%, #1a0b2e 50%, #0f0720 100%);
+            background-image: url('/images/desk-bg.svg');
+            background-size: cover;
+            background-position: center;
+        }
+        .gradient-bg::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(8, 6, 25, 0.72);
+            z-index: 1;
         }
         .card-glass {
             background: rgba(255, 255, 255, 0.05);
