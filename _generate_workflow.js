@@ -1,4 +1,4 @@
-﻿const buildGroqCode = `
+const buildGroqCode = `
 var webhookData = $('Webhook Trigger').first().json.body;
 var theme = webhookData.theme;
 var project_id = webhookData.project_id;
