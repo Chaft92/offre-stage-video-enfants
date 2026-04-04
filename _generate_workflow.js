@@ -159,7 +159,7 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
           { name: "step", value: String(stepNum) }
         ]
       },
-      options: { timeout: 10000 }
+      options: { timeout: 30000 }
     },
     id: id,
     name: name,
@@ -171,13 +171,13 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
 }
 
 const workflow = {
-  name: "AI Kids Video Generator v12",
+  name: "AI Kids Video Generator v13",
   nodes: [
     {
       parameters: {
         httpMethod: "POST",
         path: "video-pipeline",
-        responseMode: "lastNode",
+        responseMode: "onReceived",
         options: {}
       },
       id: "webhook-trigger",
@@ -211,7 +211,7 @@ const workflow = {
         contentType: "raw",
         rawContentType: "application/json",
         body: "={{ JSON.stringify($json.groqBody) }}",
-        options: { timeout: 60000 }
+        options: { timeout: 120000 }
       },
       id: "call-groq",
       name: "Call Groq API",
@@ -220,7 +220,7 @@ const workflow = {
       position: [920, 400],
       retryOnFail: true,
       maxTries: 3,
-      waitBetweenTries: 20000
+      waitBetweenTries: 30000
     },
     {
       parameters: { jsCode: parseStoryCode },
@@ -255,7 +255,7 @@ const workflow = {
         contentType: "raw",
         rawContentType: "application/json",
         body: "={{ $json.callbackBody }}",
-        options: { timeout: 30000 }
+        options: { timeout: 120000 }
       },
       id: "send-callback",
       name: "Send Callback",
@@ -278,4 +278,4 @@ const workflow = {
 };
 
 require('fs').writeFileSync('n8n_workflow.json', JSON.stringify(workflow, null, 2), 'utf-8');
-console.log('Workflow v12 generated  ' + workflow.nodes.length + ' nodes, style support enabled');
+console.log('Workflow v13 generated — ' + workflow.nodes.length + ' nodes, onReceived mode');
