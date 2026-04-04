@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->trustProxies(at: '*');
 
+        $middleware->validateCsrfTokens(except: [
+            'video/generate',
+        ]);
+
         $middleware->alias([
             'n8n.secret' => \App\Http\Middleware\VerifyN8nWebhookSecret::class,
         ]);
