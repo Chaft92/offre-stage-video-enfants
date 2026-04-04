@@ -1,18 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $project->theme }} — AI Kids Video</title>
+    <title>{{ $project->theme }} - AI Kids Video</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://image.pollinations.ai">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        * { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; background: #0a0618; color: #e5e7eb; }
 
-        body {
-            background: #0a0618;
-            color: #e5e7eb;
-        }
         .card-glass {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(12px);
@@ -26,8 +25,6 @@
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         }
-
-        /* Cinema player */
         .cinema-container {
             background: #000;
             border-radius: 16px;
@@ -53,7 +50,6 @@
         .cinema-screen img.hidden-img { opacity: 0; }
         .cinema-screen img.active-img { opacity: 1; }
 
-        /* Ken Burns zoom effect */
         @keyframes kenburns {
             0% { transform: scale(1) translate(0, 0); }
             100% { transform: scale(1.08) translate(-1%, -1%); }
@@ -70,6 +66,31 @@
             background: linear-gradient(transparent, rgba(0,0,0,0.85));
             padding: 2rem 1.5rem 1.5rem;
         }
+
+        .subtitle-bar {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 80%;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+        .subtitle-bar.hidden-sub { opacity: 0; }
+        .subtitle-text {
+            display: inline-block;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 500;
+            padding: 0.4rem 1rem;
+            border-radius: 6px;
+            line-height: 1.5;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
         .cinema-controls {
             background: rgba(20, 10, 40, 0.95);
             padding: 1rem 1.5rem;
@@ -120,7 +141,6 @@
             border: 1px solid rgba(167, 139, 250, 0.3);
             color: #c4b5fd;
         }
-
         .scene-badge-part {
             font-size: 10px;
             text-transform: uppercase;
@@ -149,7 +169,6 @@
             border-left: 3px solid #7c3aed;
             line-height: 1.85;
         }
-
         .scene-list-item {
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.08);
@@ -175,11 +194,10 @@
 
     <div class="max-w-5xl mx-auto">
 
-        {{-- Header --}}
         <div class="text-center mb-6 fade-in-up">
             <h1 class="text-3xl font-extrabold text-white mb-2">{{ $project->theme }}</h1>
             <p class="text-gray-400 text-sm">
-                {{ $project->getSceneCount() }} scènes &middot; {{ $project->getTotalDuration() }}s &middot; Projet #{{ $project->id }}
+                {{ $project->getSceneCount() }} scenes &middot; {{ $project->getTotalDuration() }}s &middot; Projet #{{ $project->id }}
             </p>
         </div>
 
@@ -189,34 +207,33 @@
                 'narratrice' => 'Narratrice',
                 'narrateur' => 'Narrateur',
                 'enfant_fille' => 'Enfant (fille)',
-                'enfant_garcon' => 'Enfant (garçon)',
+                'enfant_garcon' => 'Enfant (garcon)',
             ];
         @endphp
 
-        {{-- Cinema Player --}}
         @if(count($scenes) > 0)
         <div class="cinema-container mb-6 fade-in-up" style="animation-delay:0.1s">
             <div class="cinema-screen" id="cinema-screen">
-                {{-- Images loaded dynamically --}}
                 <div id="cinema-placeholder" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/50 to-indigo-900/50">
                     <div class="text-center">
-                        <span class="text-6xl mb-4 block">🎬</span>
+                        <span class="text-6xl mb-4 block"></span>
                         <p class="text-white text-lg font-semibold">Cliquez sur Play pour lancer le film</p>
-                        <p class="text-gray-400 text-sm mt-2">{{ count($scenes) }} scènes illustrées avec narration IA</p>
+                        <p class="text-gray-400 text-sm mt-2">{{ count($scenes) }} scenes illustrees avec narration IA</p>
                     </div>
                 </div>
 
-                {{-- Narration overlay --}}
+                <div class="subtitle-bar" id="subtitle-bar">
+                    <span class="subtitle-text" id="subtitle-text"></span>
+                </div>
+
                 <div class="cinema-overlay" id="cinema-overlay" style="display:none">
-                    <p id="cinema-narration" class="text-white text-lg font-medium leading-relaxed mb-2"></p>
                     <div class="flex items-center gap-3">
-                        <span id="cinema-scene-label" class="scene-badge-part part-introduction">Scène 1</span>
+                        <span id="cinema-scene-label" class="scene-badge-part part-introduction">Scene 1</span>
                         <span id="cinema-voice-badge" class="voice-badge"></span>
                     </div>
                 </div>
             </div>
 
-            {{-- Controls --}}
             <div class="cinema-controls">
                 <button class="ctrl-btn" id="btn-play" onclick="togglePlay()" title="Lecture / Pause">
                     <span id="play-icon">&#9654;</span>
@@ -225,44 +242,41 @@
                     <div class="progress-fill" id="progress-fill" style="width:0%"></div>
                 </div>
                 <span class="text-gray-400 text-xs font-mono whitespace-nowrap" id="scene-counter">0 / {{ count($scenes) }}</span>
+                <button class="ctrl-btn" id="btn-sub" onclick="toggleSubtitles()" title="Sous-titres">CC</button>
                 <button class="ctrl-btn" id="btn-restart" onclick="restartFilm()" title="Recommencer">&#8634;</button>
             </div>
 
-            {{-- Scene thumbnails strip --}}
             <div class="flex gap-2 p-3 overflow-x-auto" id="thumb-strip">
                 @foreach($scenes as $i => $scene)
-                @php
-                    $imgUrl = $scene['image_url'] ?? '';
-                @endphp
+                @php $imgUrl = $scene['image_url'] ?? ''; @endphp
                 <img src="{{ $imgUrl }}"
-                     alt="Scène {{ $scene['scene_number'] ?? $i+1 }}"
+                     alt="Scene {{ $scene['scene_number'] ?? $i+1 }}"
                      class="scene-thumb"
                      id="thumb-{{ $i }}"
                      onclick="jumpToScene({{ $i }})"
-                     loading="lazy">
+                     loading="lazy"
+                     decoding="async">
                 @endforeach
             </div>
         </div>
         @endif
 
-        {{-- Action buttons --}}
         <div class="flex flex-col sm:flex-row gap-4 mb-8 fade-in-up" style="animation-delay:0.15s">
             <a href="{{ route('video.index') }}"
                class="btn-primary flex-1 py-3 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-2">
-                + Générer un nouveau film
+                + Generer un nouveau film
             </a>
             <a href="/video/{{ $project->id }}/download"
                class="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2
-                      bg-white/8 border border-white/15 text-gray-300 hover:bg-white/12 hover:text-white transition-all duration-200">
-                Télécharger le pack complet (.zip)
+                      bg-white/5 border border-white/15 text-gray-300 hover:bg-white/10 hover:text-white transition-all duration-200">
+                Telecharger le pack complet (.zip)
             </a>
         </div>
 
-        {{-- Story --}}
         @if($project->story_text)
         <div class="card-glass rounded-2xl p-6 mb-8 fade-in-up" style="animation-delay:0.2s">
             <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
-                <span class="text-purple-400">📖</span> L'histoire complète
+                <span class="text-purple-400"></span> L'histoire complete
             </h2>
             <div class="story-block rounded-r-xl p-4 text-gray-300 text-sm">
                 {!! nl2br(e($project->story_text)) !!}
@@ -270,7 +284,7 @@
             @if($project->moral)
             <div class="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-900/20 to-yellow-900/20 border border-amber-500/20">
                 <p class="text-amber-300 text-sm font-semibold flex items-center gap-2 mb-1">
-                    <span>💡</span> La morale de l'histoire
+                    <span></span> La morale de l'histoire
                 </p>
                 <p class="text-amber-100/90 text-sm italic leading-relaxed">{{ $project->moral }}</p>
             </div>
@@ -278,11 +292,10 @@
         </div>
         @endif
 
-        {{-- All scenes list --}}
         @if(count($scenes) > 0)
         <div class="fade-in-up" style="animation-delay:0.3s">
             <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
-                <span class="text-purple-400">🎬</span> Les {{ count($scenes) }} scènes
+                <span class="text-purple-400"></span> Les {{ count($scenes) }} scenes
             </h2>
             <div class="flex flex-col gap-4">
                 @foreach($scenes as $i => $scene)
@@ -290,7 +303,7 @@
                     $sceneNum = $scene['scene_number'] ?? ($i + 1);
                     $part = $scene['part'] ?? 'development';
                     $partClass = match($part) { 'introduction' => 'part-introduction', 'conclusion' => 'part-conclusion', default => 'part-development' };
-                    $partLabel = match($part) { 'introduction' => 'Introduction', 'conclusion' => 'Conclusion', default => 'Développement' };
+                    $partLabel = match($part) { 'introduction' => 'Introduction', 'conclusion' => 'Conclusion', default => 'Developpement' };
                     $voiceType = $scene['voice'] ?? 'narratrice';
                     $voiceLabel = $voiceLabels[$voiceType] ?? 'Narratrice';
                     $imgUrl = $scene['image_url'] ?? '';
@@ -298,14 +311,15 @@
                 <div class="scene-list-item p-4" id="scene-card-{{ $i }}">
                     <div class="flex gap-4">
                         @if($imgUrl)
-                        <img src="{{ $imgUrl }}" alt="Scène {{ $sceneNum }}"
+                        <img src="{{ $imgUrl }}" alt="Scene {{ $sceneNum }}"
                              class="w-32 h-20 object-cover rounded-lg flex-shrink-0 cursor-pointer"
                              onclick="jumpToScene({{ $i }})"
-                             loading="lazy">
+                             loading="lazy"
+                             decoding="async">
                         @endif
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-2">
-                                <span class="text-white text-sm font-bold">Scène {{ $sceneNum }}</span>
+                            <div class="flex items-center gap-2 mb-2 flex-wrap">
+                                <span class="text-white text-sm font-bold">Scene {{ $sceneNum }}</span>
                                 <span class="scene-badge-part {{ $partClass }}">{{ $partLabel }}</span>
                                 <span class="voice-badge">{{ $voiceLabel }}</span>
                                 <span class="text-gray-500 text-xs ml-auto">{{ $scene['duration_seconds'] ?? 10 }}s</span>
@@ -321,7 +335,7 @@
         @endif
 
         <div class="mt-8 text-center text-gray-500 text-xs pb-4">
-            Fait par Julien YILDIZ &mdash; AI Kids Video Generator &mdash; #{{ $project->id }}
+            Fait par Julien YILDIZ &mdash; AI Kids Video Generator
         </div>
     </div>
 
@@ -329,111 +343,105 @@
     (function() {
         'use strict';
 
-        const SCENES = @json($scenes);
-        const PROJECT_ID = {{ $project->id }};
+        var SCENES = @json($scenes);
+        var PROJECT_ID = {{ $project->id }};
 
-        let currentScene = -1;
-        let isPlaying = false;
-        let audioElements = {};
-        let ttsFailedForScene = {};
-        let sceneTimer = null;
-        let currentUtterance = null;
+        var currentScene = -1;
+        var isPlaying = false;
+        var audioElements = {};
+        var ttsFailedForScene = {};
+        var sceneTimer = null;
+        var fallbackTimer = null;
+        var currentUtterance = null;
+        var subtitlesEnabled = true;
 
-        // ─── Image management ───
-        const imgCache = {};
+        var imgCache = {};
 
         function getSceneImage(index) {
             if (imgCache[index]) return imgCache[index];
-            const scene = SCENES[index];
+            var scene = SCENES[index];
             if (!scene || !scene.image_url) return null;
-            const img = new Image();
+            var img = new Image();
             img.src = scene.image_url;
             img.className = 'hidden-img';
             imgCache[index] = img;
             return img;
         }
 
-        // Preload first 3 images
-        for (let i = 0; i < Math.min(3, SCENES.length); i++) {
+        for (var i = 0; i < Math.min(3, SCENES.length); i++) {
             getSceneImage(i);
         }
 
-        // ─── Cinema display ───
         function showScene(index) {
             if (index < 0 || index >= SCENES.length) return;
 
-            const screen = document.getElementById('cinema-screen');
-            const placeholder = document.getElementById('cinema-placeholder');
-            const overlay = document.getElementById('cinema-overlay');
-            const scene = SCENES[index];
+            var screen = document.getElementById('cinema-screen');
+            var placeholder = document.getElementById('cinema-placeholder');
+            var overlay = document.getElementById('cinema-overlay');
+            var scene = SCENES[index];
 
-            // Hide placeholder
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
-            // Remove old active images
-            screen.querySelectorAll('img.active-img').forEach(img => {
+            screen.querySelectorAll('img.active-img').forEach(function(img) {
                 img.classList.remove('active-img');
                 img.classList.add('hidden-img');
-                setTimeout(() => img.remove(), 1000);
+                setTimeout(function() { img.remove(); }, 1000);
             });
 
-            // Add new image
-            const img = getSceneImage(index);
+            var img = getSceneImage(index);
             if (img) {
-                const clone = img.cloneNode();
+                var clone = img.cloneNode();
                 clone.className = 'hidden-img';
                 screen.insertBefore(clone, overlay);
-                // Force reflow then animate
                 clone.offsetHeight;
                 clone.classList.remove('hidden-img');
                 clone.classList.add('active-img');
             }
 
-            // Update narration + badges
-            document.getElementById('cinema-narration').textContent = scene.narration || '';
-            const label = document.getElementById('cinema-scene-label');
-            const part = scene.part || 'development';
-            label.textContent = 'Scène ' + (scene.scene_number || index + 1);
+            var subtitleText = document.getElementById('subtitle-text');
+            var subtitleBar = document.getElementById('subtitle-bar');
+            subtitleText.textContent = scene.narration || '';
+            if (subtitlesEnabled) {
+                subtitleBar.classList.remove('hidden-sub');
+            }
+
+            var label = document.getElementById('cinema-scene-label');
+            var part = scene.part || 'development';
+            label.textContent = 'Scene ' + (scene.scene_number || index + 1);
             label.className = 'scene-badge-part part-' + part;
 
-            const voiceMap = { narratrice: 'Narratrice', narrateur: 'Narrateur', enfant_fille: 'Enfant (fille)', enfant_garcon: 'Enfant (garçon)' };
+            var voiceMap = { narratrice: 'Narratrice', narrateur: 'Narrateur', enfant_fille: 'Enfant (fille)', enfant_garcon: 'Enfant (garcon)' };
             document.getElementById('cinema-voice-badge').textContent = voiceMap[scene.voice] || 'Narratrice';
 
-            // Update counter
             document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
 
-            // Update progress
-            const pct = ((index + 1) / SCENES.length) * 100;
+            var pct = ((index + 1) / SCENES.length) * 100;
             document.getElementById('progress-fill').style.width = pct + '%';
 
-            // Update thumbnails
-            document.querySelectorAll('.scene-thumb').forEach(t => t.classList.remove('active-thumb'));
-            const thumb = document.getElementById('thumb-' + index);
+            document.querySelectorAll('.scene-thumb').forEach(function(t) { t.classList.remove('active-thumb'); });
+            var thumb = document.getElementById('thumb-' + index);
             if (thumb) {
                 thumb.classList.add('active-thumb');
                 thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
             }
 
-            // Highlight scene card
-            document.querySelectorAll('.scene-list-item').forEach(c => c.classList.remove('active-scene'));
-            const card = document.getElementById('scene-card-' + index);
+            document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
+            var card = document.getElementById('scene-card-' + index);
             if (card) card.classList.add('active-scene');
 
             currentScene = index;
 
-            // Preload next 2 images
             getSceneImage(index + 1);
             getSceneImage(index + 2);
         }
 
-        // ─── Audio (ElevenLabs with browser TTS fallback) ───
         function getAudio(index) {
             if (audioElements[index]) return audioElements[index];
-            const scene = SCENES[index];
+            var scene = SCENES[index];
             if (!scene) return null;
-            const sceneNum = scene.scene_number || (index + 1);
-            const audio = new Audio();
+            var sceneNum = scene.scene_number || (index + 1);
+            var audio = new Audio();
             audio.preload = 'none';
             audio.dataset.src = '/video/' + PROJECT_ID + '/tts/' + sceneNum;
             audioElements[index] = audio;
@@ -441,28 +449,21 @@
         }
 
         function playSceneAudio(index, onEnd) {
-            const scene = SCENES[index];
-            if (!scene || !scene.narration) {
-                onEnd();
-                return;
-            }
+            var scene = SCENES[index];
+            if (!scene || !scene.narration) { onEnd(); return; }
 
             if (ttsFailedForScene[index]) {
                 playBrowserTTS(index, onEnd);
                 return;
             }
 
-            const audio = getAudio(index);
+            var audio = getAudio(index);
             if (!audio.src || audio.src === window.location.href) {
                 audio.src = audio.dataset.src;
             }
 
-            const handleEnd = () => { cleanup(); onEnd(); };
-            const handleError = () => {
-                cleanup();
-                ttsFailedForScene[index] = true;
-                playBrowserTTS(index, onEnd);
-            };
+            function handleEnd() { cleanup(); onEnd(); }
+            function handleError() { cleanup(); ttsFailedForScene[index] = true; playBrowserTTS(index, onEnd); }
 
             function cleanup() {
                 audio.removeEventListener('ended', handleEnd);
@@ -472,7 +473,7 @@
             audio.addEventListener('ended', handleEnd);
             audio.addEventListener('error', handleError);
 
-            audio.play().catch(() => {
+            audio.play().catch(function() {
                 cleanup();
                 ttsFailedForScene[index] = true;
                 playBrowserTTS(index, onEnd);
@@ -482,61 +483,52 @@
         function playBrowserTTS(index, onEnd) {
             if (!('speechSynthesis' in window)) { onEnd(); return; }
 
-            const scene = SCENES[index];
+            var scene = SCENES[index];
             if (!scene || !scene.narration) { onEnd(); return; }
 
             speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(scene.narration);
+            var utterance = new SpeechSynthesisUtterance(scene.narration);
             utterance.lang = 'fr-FR';
             utterance.rate = 0.92;
             utterance.pitch = 1.05;
 
-            const voices = speechSynthesis.getVoices();
-            const frVoice = voices.find(v => v.lang.startsWith('fr'));
+            var voices = speechSynthesis.getVoices();
+            var frVoice = voices.find(function(v) { return v.lang.startsWith('fr'); });
             if (frVoice) utterance.voice = frVoice;
 
             currentUtterance = utterance;
-            utterance.onend = () => { currentUtterance = null; onEnd(); };
-            utterance.onerror = () => { currentUtterance = null; onEnd(); };
+            utterance.onend = function() { currentUtterance = null; onEnd(); };
+            utterance.onerror = function() { currentUtterance = null; onEnd(); };
             speechSynthesis.speak(utterance);
         }
 
         function stopAllAudio() {
-            Object.values(audioElements).forEach(a => { a.pause(); a.currentTime = 0; });
-            speechSynthesis.cancel();
+            Object.values(audioElements).forEach(function(a) { a.pause(); a.currentTime = 0; });
+            if ('speechSynthesis' in window) speechSynthesis.cancel();
             currentUtterance = null;
             if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
+            if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
         }
 
-        // ─── Playback control ───
         function playScene(index) {
-            if (index >= SCENES.length) {
-                stopPlayback();
-                return;
-            }
+            if (index >= SCENES.length) { stopPlayback(); return; }
 
             showScene(index);
 
-            const scene = SCENES[index];
-            const duration = (scene.duration_seconds || 10) * 1000;
+            var scene = SCENES[index];
+            var duration = (scene.duration_seconds || 10) * 1000;
 
-            playSceneAudio(index, () => {
+            playSceneAudio(index, function() {
                 if (!isPlaying) return;
-                // If audio finished before scene duration, wait remaining
-                // If audio took longer, move on immediately
-                const next = () => { if (isPlaying) playScene(index + 1); };
-                // Small gap between scenes
-                sceneTimer = setTimeout(next, 500);
+                sceneTimer = setTimeout(function() { if (isPlaying) playScene(index + 1); }, 500);
             });
 
-            // Fallback: if audio takes too long, advance after scene duration + buffer
-            const maxWait = duration + 5000; // scene duration (ms) + 5s buffer
-            sceneTimer = setTimeout(() => {
+            fallbackTimer = setTimeout(function() {
                 if (isPlaying && currentScene === index) {
                     stopAllAudio();
                     playScene(index + 1);
                 }
-            }, maxWait);
+            }, duration + 5000);
         }
 
         window.togglePlay = function() {
@@ -573,23 +565,35 @@
         window.jumpToScene = function(index) {
             stopAllAudio();
             showScene(index);
-            if (isPlaying) {
-                playScene(index);
-            }
+            if (isPlaying) playScene(index);
         };
 
         window.seekProgress = function(e) {
-            const bar = document.getElementById('progress-bar');
-            const rect = bar.getBoundingClientRect();
-            const pct = (e.clientX - rect.left) / rect.width;
-            const target = Math.floor(pct * SCENES.length);
+            var bar = document.getElementById('progress-bar');
+            var rect = bar.getBoundingClientRect();
+            var pct = (e.clientX - rect.left) / rect.width;
+            var target = Math.floor(pct * SCENES.length);
             jumpToScene(Math.max(0, Math.min(target, SCENES.length - 1)));
         };
 
-        // Preload browser voices
+        window.toggleSubtitles = function() {
+            subtitlesEnabled = !subtitlesEnabled;
+            var bar = document.getElementById('subtitle-bar');
+            var btn = document.getElementById('btn-sub');
+            if (subtitlesEnabled) {
+                bar.classList.remove('hidden-sub');
+                btn.classList.add('active');
+            } else {
+                bar.classList.add('hidden-sub');
+                btn.classList.remove('active');
+            }
+        };
+
+        document.getElementById('btn-sub').classList.add('active');
+
         if ('speechSynthesis' in window) {
             speechSynthesis.getVoices();
-            speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+            speechSynthesis.onvoiceschanged = function() { speechSynthesis.getVoices(); };
         }
     })();
     </script>

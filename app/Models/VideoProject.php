@@ -17,7 +17,6 @@ class VideoProject extends Model
         'moral',
         'scenes_json',
         'video_url',
-        'audio_url',
         'n8n_execution_id',
         'error_message',
     ];

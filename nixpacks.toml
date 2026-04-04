@@ -1,5 +1,3 @@
-# Railway.app — build + deploy config for Laravel 11
-
 [phases.install]
 cmds = [
     "mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views storage/framework/testing storage/logs storage/app/public",
@@ -8,6 +6,4 @@ cmds = [
 ]
 
 [start]
-# Semicolons: each command runs even if the previous one fails
-# This ensures php artisan serve ALWAYS starts (healthcheck passes)
 cmd = "php artisan config:clear; php artisan migrate --graceful --force; php artisan serve --host=0.0.0.0 --port=$PORT"

@@ -12,12 +12,14 @@ class VerifyN8nWebhookSecret
     {
         $expectedSecret = config('services.n8n.secret');
 
-        if (!empty($expectedSecret)) {
-            $provided = (string) $request->header('X-N8N-Secret', '');
+        if (empty($expectedSecret)) {
+            return response()->json(['error' => 'Service unavailable'], 503);
+        }
 
-            if (!hash_equals($expectedSecret, $provided)) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
+        $provided = (string) $request->header('X-N8N-Secret', '');
+
+        if (!hash_equals($expectedSecret, $provided)) {
+            return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         return $next($request);

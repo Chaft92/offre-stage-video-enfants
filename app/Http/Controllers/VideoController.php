@@ -1,11 +1,10 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
 use App\Models\VideoProject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use ZipArchive;
@@ -21,6 +20,7 @@ class VideoController extends Controller
     {
         $data = $request->validate([
             'theme' => ['required', 'string', 'min:3', 'max:255'],
+            'style' => ['sometimes', 'string', 'in:cartoon,watercolor,pixel,anime'],
         ]);
 
         $project = VideoProject::create([
@@ -31,11 +31,11 @@ class VideoController extends Controller
         $webhookUrl = config('services.n8n.webhook_url');
 
         if (empty($webhookUrl)) {
-            $project->markFailed('N8N_WEBHOOK_URL non configuré.');
+            $project->markFailed('Pipeline non configure.');
             return response()->json([
                 'success'    => false,
                 'project_id' => $project->id,
-                'message'    => 'Le pipeline n\'est pas configuré. Contactez l\'administrateur.',
+                'message'    => 'Le pipeline n\'est pas configure.',
             ], 503);
         }
 
@@ -44,20 +44,20 @@ class VideoController extends Controller
                 'Content-Type' => 'application/json',
                 'X-N8N-Secret' => config('services.n8n.secret', ''),
             ])
+            ->connectTimeout(5)
             ->timeout(120)
             ->retry(2, 1000)
             ->post($webhookUrl, [
                 'project_id'   => $project->id,
                 'theme'        => $project->theme,
+                'style'        => $data['style'] ?? 'cartoon',
                 'callback_url' => route('n8n.callback'),
                 'error_url'    => route('n8n.error'),
                 'step_url'     => route('n8n.step'),
             ]);
 
             if ($response->failed()) {
-                throw new \RuntimeException(
-                    "N8N a retourné HTTP {$response->status()} : {$response->body()}"
-                );
+                throw new \RuntimeException("HTTP {$response->status()}");
             }
 
             $project->update([
@@ -66,18 +66,16 @@ class VideoController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Échec déclenchement N8N', [
+            Log::error('Echec declenchement N8N', [
                 'project_id' => $project->id,
                 'error'      => $e->getMessage(),
             ]);
-            $project->markFailed('Impossible de démarrer le pipeline : ' . $e->getMessage());
+            $project->markFailed('Impossible de demarrer le pipeline.');
 
             return response()->json([
                 'success'    => false,
                 'project_id' => $project->id,
-                'message'    => 'Impossible de contacter le pipeline. Réessayez dans quelques instants.',
-                'debug'      => $e->getMessage(),
-                'webhook'    => config('services.n8n.webhook_url'),
+                'message'    => 'Impossible de contacter le pipeline. Reessayez dans quelques instants.',
             ], 502);
         }
 
@@ -103,12 +101,12 @@ class VideoController extends Controller
 
         if ($project->isProcessing()) {
             return redirect()->route('video.index')
-                ->with('info', 'La vidéo n\'est pas encore prête. Vous allez être redirigé automatiquement.');
+                ->with('info', 'La video n\'est pas encore prete.');
         }
 
         if ($project->isFailed()) {
             return redirect()->route('video.index')
-                ->with('error', 'La génération a échoué : ' . $project->error_message);
+                ->with('error', 'La generation a echoue : ' . $project->error_message);
         }
 
         return view('video.result', compact('project'));
@@ -117,24 +115,22 @@ class VideoController extends Controller
     public function download(int $id)
     {
         $project = VideoProject::findOrFail($id);
-
         abort_unless($project->isDone(), 404, 'Projet non disponible.');
 
         $scenes   = $project->scenes_json ?? [];
         $story    = $project->story_text  ?? '';
         $videoUrl = $project->video_url   ?? '';
-        $theme    = $project->theme        ?? 'video';
+        $theme    = $project->theme       ?? 'video';
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'video_zip_');
-
         $zip = new ZipArchive();
         $zip->open($tmpFile, ZipArchive::OVERWRITE);
 
         $zip->addFromString('histoire_complete.txt', $story);
 
-        $sep    = str_repeat('=', 64);
+        $sep = str_repeat('=', 64);
         $sceneCount = count($scenes);
-        $script = "SCRIPT COMPLET\n{$sep}\nThème : {$theme}\n{$sep}\n\n";
+        $script = "SCRIPT COMPLET\n{$sep}\nTheme : {$theme}\n{$sep}\n\n";
         foreach ($scenes as $s) {
             $n    = str_pad((string) ($s['scene_number'] ?? '?'), 2, '0', STR_PAD_LEFT);
             $dur  = $s['duration_seconds'] ?? 15;
@@ -160,60 +156,54 @@ class VideoController extends Controller
         }
 
         $readme = implode("\n", [
-            'PACK COMPLET — AI Kids Video Generator',
-            'Fait par Julien YILDIZ — rendu test de stage',
+            'PACK COMPLET - AI Kids Video Generator',
+            'Fait par Julien YILDIZ',
             str_repeat('=', 48),
             '',
-            "Thème : {$theme}",
-            "Nombre de scènes : {$sceneCount}",
+            "Theme : {$theme}",
+            "Nombre de scenes : {$sceneCount}",
             '',
-            'Contenu de cette archive :',
-            '  histoire_complete.txt             : L\'histoire narrative générée par IA',
-            "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration par scène)",
-            '  scenes/scene_XX_narration.txt     : Narration de chaque scène individuellement',
-            $hasVideo ? '  video_complete.url                : Lien vers la vidéo finale' : '',
+            'Contenu :',
+            '  histoire_complete.txt             : Histoire narrative generee par IA',
+            "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration)",
+            '  scenes/scene_XX_narration.txt     : Narration individuelle par scene',
+            $hasVideo ? '  video_complete.url                : Lien vers la video finale' : '',
         ]);
         $zip->addFromString('README.txt', $readme);
-
         $zip->close();
 
         $slug = preg_replace('/[^a-z0-9]+/', '_', strtolower($theme));
         $slug = trim($slug, '_');
         $slug = substr($slug, 0, 40);
-        $filename = "video_{$id}_{$slug}.zip";
 
         return response()->file($tmpFile, [
             'Content-Type'        => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="video_' . $id . '_' . $slug . '.zip"',
         ])->deleteFileAfterSend();
     }
 
-    /**
-     * ElevenLabs TTS proxy — dynamic voice selection based on scene context.
-     * Voice mapping: narratrice, narrateur, enfant_fille, enfant_garcon.
-     */
     public function tts(int $id, int $sceneNumber)
     {
-        $project = VideoProject::findOrFail($id);
+        $project = VideoProject::select(['id', 'status', 'scenes_json'])->findOrFail($id);
         abort_unless($project->isDone(), 404, 'Projet non disponible.');
 
         $scenes = $project->scenes_json ?? [];
         $scene  = collect($scenes)->firstWhere('scene_number', $sceneNumber);
 
         if (!$scene || empty($scene['narration'])) {
-            abort(404, 'Scène introuvable.');
+            abort(404, 'Scene introuvable.');
         }
 
-        // Dynamic voice selection based on scene context
         $voiceMap = [
-            'narratrice'    => 'EXAVITQu4vr4xnSDxMaL', // Bella — warm female narrator
-            'narrateur'     => 'ErXwobaYiN019PkySvjV', // Antoni — warm male narrator
-            'enfant_fille'  => 'jBpfuIE2acCO8z3wKNLl', // Gigi — young female
-            'enfant_garcon' => 'yoZ06aMxZJJ28mfd3POQ', // Sam — young male
+            'narratrice'    => 'EXAVITQu4vr4xnSDxMaL',
+            'narrateur'     => 'ErXwobaYiN019PkySvjV',
+            'enfant_fille'  => 'jBpfuIE2acCO8z3wKNLl',
+            'enfant_garcon' => 'yoZ06aMxZJJ28mfd3POQ',
         ];
 
-        $voiceType = $scene['voice'] ?? 'narratrice';
-        $voiceId = $voiceMap[$voiceType] ?? $voiceMap['narratrice'];
+        $allowedVoices = array_keys($voiceMap);
+        $voiceType = in_array($scene['voice'] ?? '', $allowedVoices) ? $scene['voice'] : 'narratrice';
+        $voiceId = $voiceMap[$voiceType];
 
         $cacheDir  = storage_path('app/tts');
         $cacheFile = "{$cacheDir}/tts_{$id}_{$sceneNumber}_{$voiceType}.mp3";
@@ -226,9 +216,8 @@ class VideoController extends Controller
         }
 
         $apiKey = config('services.elevenlabs.api_key');
-
         if (empty($apiKey)) {
-            abort(503, 'ElevenLabs API key not configured.');
+            abort(503, 'Service de synthese vocale indisponible.');
         }
 
         try {
@@ -238,6 +227,7 @@ class VideoController extends Controller
                 'Accept'       => 'audio/mpeg',
             ])
             ->timeout(30)
+            ->retry(2, 300)
             ->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}", [
                 'text'     => $scene['narration'],
                 'model_id' => 'eleven_multilingual_v2',
@@ -249,11 +239,8 @@ class VideoController extends Controller
             ]);
 
             if ($response->failed()) {
-                Log::error('ElevenLabs TTS failed', [
-                    'status' => $response->status(),
-                    'body'   => substr($response->body(), 0, 500),
-                ]);
-                abort(502, 'ElevenLabs API error.');
+                Log::error('ElevenLabs TTS failed', ['status' => $response->status()]);
+                abort(502, 'Erreur synthese vocale.');
             }
 
             if (!is_dir($cacheDir)) {
@@ -268,7 +255,7 @@ class VideoController extends Controller
 
         } catch (\Exception $e) {
             Log::error('ElevenLabs TTS exception', ['error' => $e->getMessage()]);
-            abort(502, 'ElevenLabs service unavailable.');
+            abort(502, 'Service de synthese vocale indisponible.');
         }
     }
 }

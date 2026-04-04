@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers;
 
@@ -27,10 +27,9 @@ class N8NCallbackController extends Controller
         $project = VideoProject::findOrFail($data['project_id']);
 
         if ($project->isDone()) {
-            return response()->json(['success' => true, 'message' => 'Projet déjà complété.']);
+            return response()->json(['success' => true, 'message' => 'Projet deja complete.']);
         }
 
-        // Generate Pollinations.ai image URLs for each scene (free, no API key)
         $scenes = $data['scenes_json'];
         foreach ($scenes as $i => &$scene) {
             $visualPrompt = $scene['visual_description'] ?? 'A colorful cartoon scene for children';
@@ -49,16 +48,11 @@ class N8NCallbackController extends Controller
             'error_message' => null,
         ]);
 
-        Log::info("Projet #{$project->id} terminé — {$this->countScenes($scenes)} scènes avec images Pollinations.", [
+        Log::info("Projet #{$project->id} termine - " . count($scenes) . " scenes.", [
             'theme' => $project->theme,
         ]);
 
         return response()->json(['success' => true]);
-    }
-
-    private function countScenes(array $scenes): int
-    {
-        return count($scenes);
     }
 
     public function error(Request $request): JsonResponse

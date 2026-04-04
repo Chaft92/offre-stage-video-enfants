@@ -33,10 +33,6 @@ return [
         'voice_id' => env('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL'),
     ],
 
-    // Images : Pollinations.ai (gratuit, aucune clé API requise)
-    // URL pattern: https://image.pollinations.ai/prompt/{description}?width=1280&height=720
-
-    // Alternative gratuite à Claude pour la génération de l'histoire
     'groq' => [
         'api_key' => env('GROQ_API_KEY'),
         'model'   => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),

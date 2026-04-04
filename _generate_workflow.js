@@ -1,16 +1,20 @@
-// Script to generate the n8n workflow JSON
-// Run: node _generate_workflow.js
-// v11 — Groq with retry, Pollinations.ai images, dynamic voices, cinema player
-
-// ─── Code: Build Groq Request ───
-const buildGroqCode = `
+﻿const buildGroqCode = `
 var webhookData = $('Webhook Trigger').first().json.body;
 var theme = webhookData.theme;
 var project_id = webhookData.project_id;
+var style = webhookData.style || 'cartoon';
 
 if (!project_id || !theme) {
   throw new Error('Missing project_id or theme from webhook');
 }
+
+var styleMap = {
+  cartoon: 'A colorful cartoon',
+  watercolor: 'A beautiful watercolor painting',
+  pixel: 'A detailed pixel art scene',
+  anime: 'A vibrant anime style illustration'
+};
+var stylePrefix = styleMap[style] || styleMap.cartoon;
 
 var groqBody = {
   model: 'llama-3.3-70b-versatile',
@@ -24,7 +28,7 @@ var groqBody = {
     },
     {
       role: 'user',
-      content: 'Cree un script video educatif pour enfants sur : "' + theme + '".\\n\\nStructure obligatoire :\\n- Introduction (2-3 scenes) : presenter le theme et le personnage principal\\n- Developpement (5-8 scenes) : raconter l histoire avec des moments educatifs\\n- Conclusion (2-3 scenes) : resolution et morale\\n\\nRegles :\\n- Entre 10 et 15 scenes au total\\n- Chaque scene : 8-15 secondes (total 120-180s)\\n- Descriptions visuelles en ANGLAIS (pour generateur image), commencant par "A colorful cartoon"\\n- Narrations en FRANCAIS, 20-35 mots par scene\\n- Chaque scene a un champ "voice" parmi : "narratrice" (voix feminine douce), "narrateur" (voix masculine chaleureuse), "enfant_fille" (voix jeune fille), "enfant_garcon" (voix jeune garcon)\\n- Choisis la voix adaptee au contexte de chaque scene\\n\\nJSON exact :\\n{\\n  "story": "resume 50-80 mots en francais",\\n  "moral": "la morale",\\n  "scenes": [\\n    {\\n      "scene_number": 1,\\n      "part": "introduction",\\n      "visual_description": "A colorful cartoon of ...",\\n      "narration": "texte francais",\\n      "duration_seconds": 10,\\n      "voice": "narratrice"\\n    }\\n  ]\\n}'
+      content: 'Cree un script video educatif pour enfants sur : "' + theme + '".\\n\\nStructure obligatoire :\\n- Introduction (2-3 scenes) : presenter le theme et le personnage principal\\n- Developpement (5-8 scenes) : raconter l histoire avec des moments educatifs\\n- Conclusion (2-3 scenes) : resolution et morale\\n\\nRegles :\\n- Entre 10 et 15 scenes au total\\n- Chaque scene : 8-15 secondes (total 120-180s)\\n- Descriptions visuelles en ANGLAIS (pour generateur image), commencant par "' + stylePrefix + '"\\n- Narrations en FRANCAIS, 20-35 mots par scene\\n- Chaque scene a un champ "voice" parmi : "narratrice" (voix feminine douce), "narrateur" (voix masculine chaleureuse), "enfant_fille" (voix jeune fille), "enfant_garcon" (voix jeune garcon)\\n- Choisis la voix adaptee au contexte de chaque scene\\n\\nJSON exact :\\n{\\n  "story": "resume 50-80 mots en francais",\\n  "moral": "la morale",\\n  "scenes": [\\n    {\\n      "scene_number": 1,\\n      "part": "introduction",\\n      "visual_description": "' + stylePrefix + ' of ...",\\n      "narration": "texte francais",\\n      "duration_seconds": 10,\\n      "voice": "narratrice"\\n    }\\n  ]\\n}'
     }
   ]
 };
@@ -32,7 +36,6 @@ var groqBody = {
 return [{ json: { project_id: project_id, theme: theme, groqBody: groqBody } }];
 `.trim();
 
-// ─── Code: Parse Story (handles Buffer) ───
 const parseStoryCode = `
 var project_id = $('Build Groq Request').first().json.project_id;
 var theme = $('Build Groq Request').first().json.theme;
@@ -107,7 +110,6 @@ for (var s = 0; s < parsed.scenes.length; s++) {
 return [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];
 `.trim();
 
-// ─── Code: Prepare Callback ───
 const prepareCallbackCode = `
 var storyData = $('Parse Story').first().json;
 
@@ -136,7 +138,6 @@ var callbackBody = JSON.stringify({
 return [{ json: { callbackBody: callbackBody, project_id: storyData.project_id } }];
 `.trim();
 
-// ─── Helper: Notify Step node ───
 function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
   return {
     parameters: {
@@ -169,11 +170,9 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
   };
 }
 
-// ─── Build the workflow ───
 const workflow = {
-  name: "AI Kids Video Generator v11",
+  name: "AI Kids Video Generator v12",
   nodes: [
-    // 1. Webhook Trigger
     {
       parameters: {
         httpMethod: "POST",
@@ -188,11 +187,7 @@ const workflow = {
       position: [260, 400],
       webhookId: "video-pipeline"
     },
-
-    // 2. Notify Step 1
     makeNotifyNode("step1", "Notify Step 1", 1, [480, 400], "={{ $json.body.project_id }}"),
-
-    // 3. Build Groq Request
     {
       parameters: { jsCode: buildGroqCode },
       id: "build-groq",
@@ -201,8 +196,6 @@ const workflow = {
       typeVersion: 2,
       position: [700, 400]
     },
-
-    // 4. Call Groq API (with retry for rate limits)
     {
       parameters: {
         method: "POST",
@@ -218,9 +211,7 @@ const workflow = {
         contentType: "raw",
         rawContentType: "application/json",
         body: "={{ JSON.stringify($json.groqBody) }}",
-        options: {
-          timeout: 60000
-        }
+        options: { timeout: 60000 }
       },
       id: "call-groq",
       name: "Call Groq API",
@@ -231,8 +222,6 @@ const workflow = {
       maxTries: 3,
       waitBetweenTries: 20000
     },
-
-    // 5. Parse Story
     {
       parameters: { jsCode: parseStoryCode },
       id: "parse-story",
@@ -241,11 +230,7 @@ const workflow = {
       typeVersion: 2,
       position: [1140, 400]
     },
-
-    // 6. Notify Step 2
     makeNotifyNode("step2", "Notify Step 2", 2, [1360, 400], "={{ $json.project_id }}"),
-
-    // 7. Prepare Callback
     {
       parameters: { jsCode: prepareCallbackCode },
       id: "prepare-callback",
@@ -254,8 +239,6 @@ const workflow = {
       typeVersion: 2,
       position: [1580, 400]
     },
-
-    // 8. Send Callback to Laravel
     {
       parameters: {
         method: "POST",
@@ -282,28 +265,17 @@ const workflow = {
     }
   ],
   connections: {
-    "Webhook Trigger":   { main: [[{ node: "Notify Step 1",     type: "main", index: 0 }]] },
-    "Notify Step 1":     { main: [[{ node: "Build Groq Request", type: "main", index: 0 }]] },
-    "Build Groq Request":{ main: [[{ node: "Call Groq API",      type: "main", index: 0 }]] },
-    "Call Groq API":     { main: [[{ node: "Parse Story",        type: "main", index: 0 }]] },
-    "Parse Story":       { main: [[{ node: "Notify Step 2",      type: "main", index: 0 }]] },
-    "Notify Step 2":     { main: [[{ node: "Prepare Callback",   type: "main", index: 0 }]] },
-    "Prepare Callback":  { main: [[{ node: "Send Callback",      type: "main", index: 0 }]] }
+    "Webhook Trigger":    { main: [[{ node: "Notify Step 1",      type: "main", index: 0 }]] },
+    "Notify Step 1":      { main: [[{ node: "Build Groq Request",  type: "main", index: 0 }]] },
+    "Build Groq Request": { main: [[{ node: "Call Groq API",       type: "main", index: 0 }]] },
+    "Call Groq API":      { main: [[{ node: "Parse Story",         type: "main", index: 0 }]] },
+    "Parse Story":        { main: [[{ node: "Notify Step 2",       type: "main", index: 0 }]] },
+    "Notify Step 2":      { main: [[{ node: "Prepare Callback",    type: "main", index: 0 }]] },
+    "Prepare Callback":   { main: [[{ node: "Send Callback",       type: "main", index: 0 }]] }
   },
   active: false,
   settings: { executionOrder: "v1" }
 };
 
-require('fs').writeFileSync(
-  'n8n_workflow.json',
-  JSON.stringify(workflow, null, 2),
-  'utf-8'
-);
-
-console.log('Workflow v11 generated!');
-console.log('Nodes:', workflow.nodes.length);
-console.log('Features: Groq with retry (3x, 20s delay), dynamic voices, Pollinations images');
-Object.keys(workflow.connections).forEach(k => {
-  const targets = workflow.connections[k].main[0].map(c => c.node);
-  console.log(' ', k, '->', targets.join(', '));
-});
+require('fs').writeFileSync('n8n_workflow.json', JSON.stringify(workflow, null, 2), 'utf-8');
+console.log('Workflow v12 generated  ' + workflow.nodes.length + ' nodes, style support enabled');

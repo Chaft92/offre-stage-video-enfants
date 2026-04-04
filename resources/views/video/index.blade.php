@@ -1,26 +1,19 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>AI Kids Video Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        * { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; }
 
         .gradient-bg {
-            background-image: url('/images/desk-bg.svg');
-            background-size: cover;
-            background-position: center;
-        }
-        .gradient-bg::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: rgba(8, 6, 25, 0.72);
-            z-index: 1;
+            background: linear-gradient(135deg, #0a0618 0%, #1a0b2e 50%, #0f0720 100%);
         }
         .card-glass {
             background: rgba(255, 255, 255, 0.05);
@@ -41,18 +34,12 @@
             transform: none;
             box-shadow: none;
         }
-
-        .step-icon {
-            transition: all 0.5s ease;
-        }
+        .step-icon { transition: all 0.5s ease; }
         .step-waiting  { color: #6b7280; }
         .step-active   { color: #a78bfa; }
         .step-done     { color: #34d399; }
         .step-error    { color: #f87171; }
-
-        .step-line {
-            transition: background-color 0.5s ease;
-        }
+        .step-line { transition: background-color 0.5s ease; }
         .step-line-done   { background-color: #34d399; }
         .step-line-active { background: linear-gradient(90deg, #34d399, #a78bfa); }
 
@@ -63,10 +50,7 @@
         }
         .step-active-ring { animation: pulse-ring 1.5s ease-out infinite; }
 
-        @keyframes spin-smooth {
-            from { transform: rotate(0deg); }
-            to   { transform: rotate(360deg); }
-        }
+        @keyframes spin-smooth { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .spin { animation: spin-smooth 1.2s linear infinite; }
 
         @keyframes fade-in-up {
@@ -85,6 +69,14 @@
             0%, 100% { transform: translateY(0) rotate(0deg); }
             50%       { transform: translateY(-20px) rotate(180deg); }
         }
+
+        .style-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .style-card:hover { transform: translateY(-2px); border-color: rgba(167, 139, 250, 0.4); }
+        .style-card.selected { border-color: #a78bfa; background: rgba(167, 139, 250, 0.15); }
     </style>
 </head>
 <body class="gradient-bg min-h-screen flex flex-col items-center justify-center p-4 relative overflow-x-hidden">
@@ -95,10 +87,9 @@
 
     <div class="w-full max-w-2xl relative z-10">
 
-        {{-- Header --}}
         <div class="text-center mb-10 fade-in-up">
             <div class="inline-block mb-4">
-                <span class="text-6xl">🎬</span>
+                <span class="text-6xl"></span>
             </div>
             <h1 class="text-4xl font-extrabold text-white mb-2">
                 AI Kids
@@ -106,7 +97,7 @@
                     Video Generator
                 </span>
             </h1>
-            <p class="text-gray-400 text-lg">Transformez un thème en film animé illustré pour enfants avec narration IA</p>
+            <p class="text-gray-400 text-lg">Transformez un theme en film anime illustre pour enfants avec narration IA</p>
         </div>
 
         @if(session('info'))
@@ -121,19 +112,19 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                 </svg>
-                Choisissez votre thème
+                Configurez votre film
             </h2>
 
             <form id="generate-form">
                 <div class="mb-6">
                     <label for="theme" class="block text-gray-300 text-sm font-medium mb-2">
-                        Thème de l'histoire
+                        Theme de l'histoire
                     </label>
                     <input
                         type="text"
                         id="theme"
                         name="theme"
-                        placeholder="Ex : Un petit robot qui apprend à faire des amis dans la forêt enchantée"
+                        placeholder="Ex : Un petit robot qui apprend a faire des amis dans la foret enchantee"
                         class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-4 text-white placeholder-gray-500
                                focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
                                transition-all duration-200 text-base"
@@ -142,9 +133,32 @@
                         autocomplete="off"
                     >
                     <div class="mt-2 flex justify-between items-center">
-                        <p class="text-gray-500 text-xs">Entre 3 et 255 caractères. Soyez créatifs !</p>
+                        <p class="text-gray-500 text-xs">Entre 3 et 255 caracteres. Soyez creatifs !</p>
                         <p class="text-xs font-mono"><span id="char-count" class="text-gray-500">0</span><span class="text-gray-600">/255</span></p>
                     </div>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-gray-300 text-sm font-medium mb-3">Style visuel</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="style-card selected card-glass rounded-xl p-3 text-center" data-style="cartoon">
+                            <span class="text-2xl block mb-1"></span>
+                            <span class="text-white text-xs font-semibold">Cartoon</span>
+                        </div>
+                        <div class="style-card card-glass rounded-xl p-3 text-center" data-style="watercolor">
+                            <span class="text-2xl block mb-1"></span>
+                            <span class="text-white text-xs font-semibold">Aquarelle</span>
+                        </div>
+                        <div class="style-card card-glass rounded-xl p-3 text-center" data-style="pixel">
+                            <span class="text-2xl block mb-1"></span>
+                            <span class="text-white text-xs font-semibold">Pixel Art</span>
+                        </div>
+                        <div class="style-card card-glass rounded-xl p-3 text-center" data-style="anime">
+                            <span class="text-2xl block mb-1"></span>
+                            <span class="text-white text-xs font-semibold">Anime</span>
+                        </div>
+                    </div>
+                    <input type="hidden" id="style" name="style" value="cartoon">
                 </div>
 
                 <div id="form-error" class="hidden mb-4 p-3 bg-red-900/40 border border-red-500/40 rounded-lg text-red-300 text-sm"></div>
@@ -159,7 +173,7 @@
                                   d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     </span>
-                    <span id="btn-text">Générer le film</span>
+                    <span id="btn-text">Generer le film</span>
                 </button>
             </form>
         </div>
@@ -167,22 +181,21 @@
         <div id="pipeline-section" class="hidden fade-in-up" style="animation-delay:0.1s">
 
             <div class="card-glass rounded-2xl p-5 mb-6 flex items-center gap-4">
-                <span class="text-2xl flex-shrink-0">🎯</span>
+                <span class="text-2xl flex-shrink-0"></span>
                 <div class="flex-1 min-w-0">
-                    <p class="text-gray-400 text-xs uppercase tracking-wider font-medium">Thème en cours</p>
+                    <p class="text-gray-400 text-xs uppercase tracking-wider font-medium">Theme en cours</p>
                     <p id="pipeline-theme" class="text-white font-semibold mt-1 truncate"></p>
                 </div>
                 <div class="text-right flex-shrink-0">
-                    <p class="text-gray-500 text-xs uppercase tracking-wider font-medium">Temps écoulé</p>
+                    <p class="text-gray-500 text-xs uppercase tracking-wider font-medium">Temps ecoule</p>
                     <p id="elapsed-time" class="text-purple-300 font-mono font-bold mt-1">0s</p>
                 </div>
             </div>
 
             <div class="card-glass rounded-2xl p-8">
-                <h2 class="text-white text-lg font-semibold mb-8 text-center">Suivi du pipeline de génération</h2>
+                <h2 class="text-white text-lg font-semibold mb-8 text-center">Suivi du pipeline de generation</h2>
 
                 <div class="flex flex-col gap-0">
-                    {{-- Étape 1 --}}
                     <div class="step-item flex items-start gap-4" data-step="1">
                         <div class="flex flex-col items-center">
                             <div class="step-icon step-waiting w-12 h-12 rounded-full border-2 border-current flex items-center justify-center text-xl font-bold flex-shrink-0">
@@ -191,17 +204,16 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="step-check hidden">✓</span>
+                                <span class="step-check hidden"></span>
                             </div>
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération de l'histoire</p>
-                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) écrit un script complet avec introduction, développement et conclusion</p>
+                            <p class="text-white font-medium">Generation de l'histoire</p>
+                            <p class="text-gray-400 text-sm mt-1">L'IA (Groq) ecrit un script complet avec introduction, developpement et conclusion</p>
                         </div>
                     </div>
 
-                    {{-- Étape 2 --}}
                     <div class="step-item flex items-start gap-4" data-step="2">
                         <div class="flex flex-col items-center">
                             <div class="step-icon step-waiting w-12 h-12 rounded-full border-2 border-current flex items-center justify-center text-xl font-bold flex-shrink-0">
@@ -210,17 +222,16 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="step-check hidden">✓</span>
+                                <span class="step-check hidden"></span>
                             </div>
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Création des scènes illustrées</p>
-                            <p class="text-gray-400 text-sm mt-1">10 à 15 scènes avec descriptions visuelles et narration en français</p>
+                            <p class="text-white font-medium">Creation des scenes illustrees</p>
+                            <p class="text-gray-400 text-sm mt-1">10 a 15 scenes avec descriptions visuelles et narration en francais</p>
                         </div>
                     </div>
 
-                    {{-- Étape 3 --}}
                     <div class="step-item flex items-start gap-4" data-step="3">
                         <div class="flex flex-col items-center">
                             <div class="step-icon step-waiting w-12 h-12 rounded-full border-2 border-current flex items-center justify-center text-xl font-bold flex-shrink-0">
@@ -229,17 +240,16 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="step-check hidden">✓</span>
+                                <span class="step-check hidden"></span>
                             </div>
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Génération des illustrations</p>
-                            <p class="text-gray-400 text-sm mt-1">Images générées par Pollinations.ai (FLUX) pour chaque scène</p>
+                            <p class="text-white font-medium">Generation des illustrations</p>
+                            <p class="text-gray-400 text-sm mt-1">Images generees par Pollinations.ai dans le style choisi</p>
                         </div>
                     </div>
 
-                    {{-- Étape 4 --}}
                     <div class="step-item flex items-start gap-4" data-step="4">
                         <div class="flex flex-col items-center">
                             <div class="step-icon step-waiting w-12 h-12 rounded-full border-2 border-current flex items-center justify-center text-xl font-bold flex-shrink-0">
@@ -248,17 +258,16 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="step-check hidden">✓</span>
+                                <span class="step-check hidden"></span>
                             </div>
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Synthèse vocale</p>
-                            <p class="text-gray-400 text-sm mt-1">Voix dynamiques ElevenLabs adaptées au contexte de chaque scène</p>
+                            <p class="text-white font-medium">Synthese vocale</p>
+                            <p class="text-gray-400 text-sm mt-1">Voix dynamiques ElevenLabs adaptees au contexte de chaque scene</p>
                         </div>
                     </div>
 
-                    {{-- Étape 5 --}}
                     <div class="step-item flex items-start gap-4" data-step="5">
                         <div class="flex flex-col items-center">
                             <div class="step-icon step-waiting w-12 h-12 rounded-full border-2 border-current flex items-center justify-center text-xl font-bold flex-shrink-0">
@@ -267,26 +276,26 @@
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                                 </svg>
-                                <span class="step-check hidden">✓</span>
+                                <span class="step-check hidden"></span>
                             </div>
                         </div>
                         <div class="pt-2">
-                            <p class="text-white font-medium">Film animé prêt !</p>
-                            <p class="text-gray-400 text-sm mt-1">Assemblage de toutes les scènes en un film interactif avec narration</p>
+                            <p class="text-white font-medium">Film anime pret !</p>
+                            <p class="text-gray-400 text-sm mt-1">Assemblage de toutes les scenes en un film interactif avec narration</p>
                         </div>
                     </div>
                 </div>
 
                 <div id="status-message" class="mt-8 text-center text-gray-400 text-sm italic">
-                    Initialisation du pipeline…
+                    Initialisation du pipeline...
                 </div>
 
                 <div id="pipeline-error" class="hidden mt-6 p-4 bg-red-900/40 border border-red-500/40 rounded-xl">
-                    <p class="text-red-300 font-medium mb-1">❌ Le pipeline a rencontré une erreur</p>
+                    <p class="text-red-300 font-medium mb-1">Le pipeline a rencontre une erreur</p>
                     <p id="pipeline-error-msg" class="text-red-400 text-sm"></p>
                     <button onclick="location.reload()"
                             class="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition">
-                        Réessayer
+                        Reessayer
                     </button>
                 </div>
             </div>
@@ -295,7 +304,7 @@
     </div>
 
     <footer class="mt-12 text-gray-400 text-xs text-center relative z-10">
-        Fait par Julien YILDIZ &mdash; rendu test de stage
+        Fait par Julien YILDIZ
     </footer>
 
     <script>
@@ -303,54 +312,65 @@
         'use strict';
 
         const POLL_INTERVAL = 3000;
-        const CSRF_TOKEN    = document.querySelector('meta[name="csrf-token"]').content;
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
 
-        let pollTimer     = null;
+        let pollTimer = null;
         let timerInterval = null;
-        let projectId     = null;
-        let startedAt     = null;
+        let projectId = null;
+        let startedAt = null;
+        let selectedStyle = 'cartoon';
 
         const themeInput = document.getElementById('theme');
-        const charCount  = document.getElementById('char-count');
+        const charCount = document.getElementById('char-count');
         if (themeInput && charCount) {
-            themeInput.addEventListener('input', () => {
+            themeInput.addEventListener('input', function() {
                 charCount.textContent = themeInput.value.length;
-                charCount.className   = themeInput.value.length > 230 ? 'text-yellow-400 font-medium' : 'text-gray-500';
+                charCount.className = themeInput.value.length > 230 ? 'text-yellow-400 font-medium' : 'text-gray-500';
             });
         }
 
-        document.getElementById('generate-form').addEventListener('submit', async (e) => {
+        document.querySelectorAll('.style-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.style-card').forEach(function(c) { c.classList.remove('selected'); });
+                card.classList.add('selected');
+                selectedStyle = card.dataset.style;
+                document.getElementById('style').value = selectedStyle;
+            });
+        });
+
+        document.getElementById('generate-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
-            const theme  = document.getElementById('theme').value.trim();
-            const errDiv = document.getElementById('form-error');
+            var theme = document.getElementById('theme').value.trim();
+            var errDiv = document.getElementById('form-error');
             errDiv.classList.add('hidden');
 
             if (theme.length < 3) {
-                errDiv.textContent = 'Le thème doit contenir au moins 3 caractères.';
+                errDiv.textContent = 'Le theme doit contenir au moins 3 caracteres.';
                 errDiv.classList.remove('hidden');
                 return;
             }
 
-            const btn     = document.getElementById('submit-btn');
-            const btnText = document.getElementById('btn-text');
-            btn.disabled  = true;
-            btnText.textContent = 'Lancement…';
+            var btn = document.getElementById('submit-btn');
+            var btnText = document.getElementById('btn-text');
+            btn.disabled = true;
+            btnText.textContent = 'Lancement...';
+
             try {
-                const res = await fetch('{{ route('video.generate') }}', {
+                var res = await fetch('{{ route("video.generate") }}', {
                     method: 'POST',
                     headers: {
-                        'Content-Type' : 'application/json',
-                        'X-CSRF-TOKEN' : CSRF_TOKEN,
-                        'Accept'       : 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF_TOKEN,
+                        'Accept': 'application/json',
                     },
-                    body: JSON.stringify({ theme }),
+                    body: JSON.stringify({ theme: theme, style: selectedStyle }),
                 });
 
-                const data = await res.json();
+                var data = await res.json();
 
                 if (!res.ok || !data.success) {
-                    throw new Error(data.errors?.theme?.[0] ?? data.message ?? 'Erreur serveur.');
+                    throw new Error(data.errors?.theme?.[0] || data.message || 'Erreur serveur.');
                 }
 
                 projectId = data.project_id;
@@ -365,20 +385,18 @@
             } catch (err) {
                 errDiv.textContent = err.message;
                 errDiv.classList.remove('hidden');
-                btn.disabled        = false;
-                btnText.textContent = 'Générer le film';
+                btn.disabled = false;
+                btnText.textContent = 'Generer le film';
             }
         });
 
         function startTimer() {
-            const el = document.getElementById('elapsed-time');
+            var el = document.getElementById('elapsed-time');
             if (!el) return;
-            timerInterval = setInterval(() => {
-                const s = Math.floor((Date.now() - startedAt) / 1000);
-                const m = Math.floor(s / 60);
-                el.textContent = m > 0
-                    ? `${m}m ${String(s % 60).padStart(2, '0')}s`
-                    : `${s}s`;
+            timerInterval = setInterval(function() {
+                var s = Math.floor((Date.now() - startedAt) / 1000);
+                var m = Math.floor(s / 60);
+                el.textContent = m > 0 ? m + 'm ' + String(s % 60).padStart(2, '0') + 's' : s + 's';
             }, 1000);
         }
 
@@ -390,89 +408,78 @@
 
         async function poll() {
             try {
-                const res = await fetch(`{{ url('/video/status') }}/${projectId}`, {
+                var res = await fetch('{{ url("/video/status") }}/' + projectId, {
                     headers: { 'Accept': 'application/json' },
                 });
-
                 if (!res.ok) return;
 
-                const data = await res.json();
+                var data = await res.json();
                 updatePipeline(data);
 
                 if (data.status === 'done') {
                     clearInterval(pollTimer);
                     clearInterval(timerInterval);
-                    setTimeout(() => { window.location.href = `{{ url('/video') }}/${projectId}`; }, 1000);
+                    setTimeout(function() { window.location.href = '{{ url("/video") }}/' + projectId; }, 1000);
                 } else if (data.status === 'error') {
                     clearInterval(pollTimer);
                     clearInterval(timerInterval);
-                    showPipelineError(data.error_message ?? 'Erreur inconnue dans le pipeline.');
+                    showPipelineError(data.error_message || 'Erreur inconnue dans le pipeline.');
                 }
-            } catch (err) {
-                console.warn('Polling error:', err.message);
-            }
+            } catch (err) {}
         }
 
         function updatePipeline(data) {
-            const status      = data.status;
-            const currentStep = data.current_step || 0;
+            var status = data.status;
+            var currentStep = data.current_step || 0;
 
-            const stepMessages = [
-                'Initialisation du pipeline…',
-                'L\'IA génère l\'histoire…',
-                'Création des scènes illustrées…',
-                'Génération des illustrations (Pollinations.ai)…',
-                'Synthèse vocale (ElevenLabs)…',
-                'Film animé prêt ! Redirection…',
+            var stepMessages = [
+                'Initialisation du pipeline...',
+                'L\'IA genere l\'histoire...',
+                'Creation des scenes illustrees...',
+                'Generation des illustrations...',
+                'Synthese vocale (ElevenLabs)...',
+                'Film anime pret ! Redirection...',
             ];
 
-            const msgEl = document.getElementById('status-message');
+            var msgEl = document.getElementById('status-message');
             if (msgEl) {
-                msgEl.textContent = status === 'done'
-                    ? '✅ Film prêt ! Redirection…'
-                    : status === 'error'
-                    ? '❌ Erreur dans le pipeline.'
-                    : (stepMessages[currentStep] ?? stepMessages[0]);
+                if (status === 'done') msgEl.textContent = 'Film pret ! Redirection...';
+                else if (status === 'error') msgEl.textContent = 'Erreur dans le pipeline.';
+                else msgEl.textContent = stepMessages[currentStep] || stepMessages[0];
             }
 
-            for (let s = 1; s <= 5; s++) {
-                const el = document.querySelector(`.step-item[data-step="${s}"]`);
+            for (var s = 1; s <= 5; s++) {
+                var el = document.querySelector('.step-item[data-step="' + s + '"]');
                 if (!el) continue;
 
-                const iconEl    = el.querySelector('.step-icon');
-                const numEl     = el.querySelector('.step-num');
-                const spinnerEl = el.querySelector('.step-spinner');
-                const checkEl   = el.querySelector('.step-check');
-                const lineEl    = el.querySelector('.step-line');
+                var iconEl = el.querySelector('.step-icon');
+                var numEl = el.querySelector('.step-num');
+                var spinnerEl = el.querySelector('.step-spinner');
+                var checkEl = el.querySelector('.step-check');
+                var lineEl = el.querySelector('.step-line');
 
-                // Réinitialise les classes
                 iconEl.classList.remove('step-waiting', 'step-active', 'step-done', 'step-error', 'step-active-ring');
 
                 if (status === 'done' || s < currentStep) {
-                    // Étape terminée
                     iconEl.classList.add('step-done');
                     numEl.classList.add('hidden');
                     spinnerEl.classList.add('hidden');
                     checkEl.classList.remove('hidden');
                     iconEl.style.borderColor = '#34d399';
                     if (lineEl) { lineEl.classList.add('step-line-done'); lineEl.classList.remove('step-line-active'); }
-
                 } else if (s === currentStep && status === 'processing') {
-                    // Étape en cours
                     iconEl.classList.add('step-active', 'step-active-ring');
                     numEl.classList.add('hidden');
                     spinnerEl.classList.remove('hidden');
                     checkEl.classList.add('hidden');
                     iconEl.style.borderColor = '#a78bfa';
                     if (lineEl) { lineEl.classList.add('step-line-active'); lineEl.classList.remove('step-line-done'); }
-
                 } else if (status === 'error' && s === currentStep) {
                     iconEl.classList.add('step-error');
                     numEl.classList.remove('hidden');
                     spinnerEl.classList.add('hidden');
                     checkEl.classList.add('hidden');
                     iconEl.style.borderColor = '#f87171';
-
                 } else {
                     iconEl.classList.add('step-waiting');
                     numEl.classList.remove('hidden');
@@ -489,6 +496,14 @@
             document.getElementById('status-message').classList.add('hidden');
         }
 
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                clearInterval(pollTimer);
+            } else if (projectId) {
+                poll();
+                pollTimer = setInterval(poll, POLL_INTERVAL);
+            }
+        });
     })();
     </script>
 </body>
