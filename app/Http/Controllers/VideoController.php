@@ -55,13 +55,13 @@ class VideoController extends Controller
                 'step_url'     => route('n8n.step'),
             ]);
 
-            if ($response->failed()) {
+            if ($response->status() >= 500) {
                 throw new \RuntimeException("HTTP {$response->status()}");
             }
 
             $project->update([
                 'status'           => 'processing',
-                'n8n_execution_id' => $response->json('executionId'),
+                'n8n_execution_id' => $response->json('executionId') ?? $response->json('message') ?? 'started',
             ]);
 
         } catch (\Exception $e) {
