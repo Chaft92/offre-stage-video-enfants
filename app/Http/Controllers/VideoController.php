@@ -25,7 +25,7 @@ class VideoController extends Controller
 
         $project = VideoProject::create([
             'theme'  => trim($data['theme']),
-            'status' => 'pending',
+            'status' => 'processing',
         ]);
 
         $webhookUrl = config('services.n8n.webhook_url');
@@ -40,7 +40,7 @@ class VideoController extends Controller
         }
 
         try {
-            $response = Http::withHeaders([
+            Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'X-N8N-Secret' => config('services.n8n.secret', ''),
             ])
@@ -54,28 +54,11 @@ class VideoController extends Controller
                 'error_url'    => route('n8n.error'),
                 'step_url'     => route('n8n.step'),
             ]);
-
-            if ($response->status() >= 500) {
-                throw new \RuntimeException("HTTP {$response->status()}");
-            }
-
-            $project->update([
-                'status'           => 'processing',
-                'n8n_execution_id' => $response->json('executionId') ?? $response->json('message') ?? 'started',
-            ]);
-
         } catch (\Exception $e) {
-            Log::error('Echec declenchement N8N', [
+            Log::warning('N8N webhook call exception (workflow may still run)', [
                 'project_id' => $project->id,
                 'error'      => $e->getMessage(),
             ]);
-            $project->markFailed('Impossible de demarrer le pipeline.');
-
-            return response()->json([
-                'success'    => false,
-                'project_id' => $project->id,
-                'message'    => 'Impossible de contacter le pipeline. Reessayez dans quelques instants.',
-            ], 502);
         }
 
         return response()->json([
