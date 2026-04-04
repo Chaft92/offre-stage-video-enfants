@@ -50,13 +50,31 @@
         .cinema-screen img.hidden-img { opacity: 0; }
         .cinema-screen img.active-img { opacity: 1; }
 
-        @keyframes kenburns {
+        @keyframes kb-zoom-in {
             0% { transform: scale(1) translate(0, 0); }
-            100% { transform: scale(1.08) translate(-1%, -1%); }
+            100% { transform: scale(1.12) translate(-1%, -0.5%); }
         }
-        .cinema-screen img.active-img {
-            animation: kenburns 15s ease-in-out forwards;
+        @keyframes kb-zoom-out {
+            0% { transform: scale(1.12) translate(-1%, -0.5%); }
+            100% { transform: scale(1) translate(0, 0); }
         }
+        @keyframes kb-pan-right {
+            0% { transform: scale(1.05) translate(-2%, 0); }
+            100% { transform: scale(1.05) translate(2%, 0); }
+        }
+        @keyframes kb-pan-left {
+            0% { transform: scale(1.05) translate(2%, 0); }
+            100% { transform: scale(1.05) translate(-2%, 0); }
+        }
+        @keyframes kb-pan-up {
+            0% { transform: scale(1.08) translate(0, 1%); }
+            100% { transform: scale(1.08) translate(0, -1%); }
+        }
+        .kb-zoom-in    { animation: kb-zoom-in 12s ease-in-out forwards; }
+        .kb-zoom-out   { animation: kb-zoom-out 12s ease-in-out forwards; }
+        .kb-pan-right  { animation: kb-pan-right 12s ease-in-out forwards; }
+        .kb-pan-left   { animation: kb-pan-left 12s ease-in-out forwards; }
+        .kb-pan-up     { animation: kb-pan-up 12s ease-in-out forwards; }
 
         .cinema-overlay {
             position: absolute;
@@ -65,6 +83,7 @@
             right: 0;
             background: linear-gradient(transparent, rgba(0,0,0,0.85));
             padding: 2rem 1.5rem 1.5rem;
+            z-index: 5;
         }
 
         .subtitle-bar {
@@ -160,6 +179,7 @@
             border: 2px solid transparent;
             cursor: pointer;
             transition: border-color 0.2s, transform 0.2s;
+            background: #1a1a2e;
         }
         .scene-thumb:hover { transform: scale(1.05); }
         .scene-thumb.active-thumb { border-color: #a855f7; }
@@ -184,6 +204,35 @@
             to   { opacity: 1; transform: translateY(0); }
         }
         .fade-in-up { animation: fade-in-up 0.5s ease forwards; }
+
+        @keyframes spin-smooth { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .preload-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 6, 24, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            transition: opacity 0.6s ease;
+        }
+        .preload-overlay.done { opacity: 0; pointer-events: none; }
+        .preload-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+        .preload-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #a855f7);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -212,11 +261,24 @@
         @endphp
 
         @if(count($scenes) > 0)
-        <div class="cinema-container mb-6 fade-in-up" style="animation-delay:0.1s">
+        <div class="cinema-container mb-6 fade-in-up" style="animation-delay:0.1s; position:relative;">
+
+            <div class="preload-overlay" id="preload-overlay">
+                <svg class="w-10 h-10 text-purple-400 mb-3" style="animation: spin-smooth 1.2s linear infinite;" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                <p class="text-white font-semibold text-sm" id="preload-label">Chargement des illustrations...</p>
+                <p class="text-gray-400 text-xs mt-1" id="preload-count">0 / {{ count($scenes) }}</p>
+                <div class="preload-bar">
+                    <div class="preload-fill" id="preload-fill" style="width:0%"></div>
+                </div>
+            </div>
+
             <div class="cinema-screen" id="cinema-screen">
                 <div id="cinema-placeholder" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/50 to-indigo-900/50">
                     <div class="text-center">
-                        <span class="text-6xl mb-4 block"></span>
+                        <span class="text-6xl mb-4 block">&#127916;</span>
                         <p class="text-white text-lg font-semibold">Cliquez sur Play pour lancer le film</p>
                         <p class="text-gray-400 text-sm mt-2">{{ count($scenes) }} scenes illustrees avec narration IA</p>
                     </div>
@@ -248,14 +310,12 @@
 
             <div class="flex gap-2 p-3 overflow-x-auto" id="thumb-strip">
                 @foreach($scenes as $i => $scene)
-                @php $imgUrl = $scene['image_url'] ?? ''; @endphp
-                <img src="{{ $imgUrl }}"
-                     alt="Scene {{ $scene['scene_number'] ?? $i+1 }}"
-                     class="scene-thumb"
-                     id="thumb-{{ $i }}"
-                     onclick="jumpToScene({{ $i }})"
-                     loading="lazy"
-                     decoding="async">
+                <div class="flex-shrink-0" style="width:80px;height:45px;background:#1a1a2e;border-radius:6px;border:2px solid transparent;cursor:pointer;overflow:hidden;" id="thumb-wrap-{{ $i }}" onclick="jumpToScene({{ $i }})">
+                    <img id="thumb-{{ $i }}"
+                         alt="Scene {{ $scene['scene_number'] ?? $i+1 }}"
+                         class="scene-thumb"
+                         style="width:100%;height:100%;opacity:0;transition:opacity 0.3s;">
+                </div>
                 @endforeach
             </div>
         </div>
@@ -276,7 +336,7 @@
         @if($project->story_text)
         <div class="card-glass rounded-2xl p-6 mb-8 fade-in-up" style="animation-delay:0.2s">
             <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
-                <span class="text-purple-400"></span> L'histoire complete
+                <span class="text-purple-400">&#128214;</span> L'histoire complete
             </h2>
             <div class="story-block rounded-r-xl p-4 text-gray-300 text-sm">
                 {!! nl2br(e($project->story_text)) !!}
@@ -284,7 +344,7 @@
             @if($project->moral)
             <div class="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-900/20 to-yellow-900/20 border border-amber-500/20">
                 <p class="text-amber-300 text-sm font-semibold flex items-center gap-2 mb-1">
-                    <span></span> La morale de l'histoire
+                    <span>&#128161;</span> La morale de l'histoire
                 </p>
                 <p class="text-amber-100/90 text-sm italic leading-relaxed">{{ $project->moral }}</p>
             </div>
@@ -295,7 +355,7 @@
         @if(count($scenes) > 0)
         <div class="fade-in-up" style="animation-delay:0.3s">
             <h2 class="text-white text-lg font-semibold mb-4 flex items-center gap-2">
-                <span class="text-purple-400"></span> Les {{ count($scenes) }} scenes
+                <span class="text-purple-400">&#127916;</span> Les {{ count($scenes) }} scenes
             </h2>
             <div class="flex flex-col gap-4">
                 @foreach($scenes as $i => $scene)
@@ -306,17 +366,12 @@
                     $partLabel = match($part) { 'introduction' => 'Introduction', 'conclusion' => 'Conclusion', default => 'Developpement' };
                     $voiceType = $scene['voice'] ?? 'narratrice';
                     $voiceLabel = $voiceLabels[$voiceType] ?? 'Narratrice';
-                    $imgUrl = $scene['image_url'] ?? '';
                 @endphp
                 <div class="scene-list-item p-4" id="scene-card-{{ $i }}">
                     <div class="flex gap-4">
-                        @if($imgUrl)
-                        <img src="{{ $imgUrl }}" alt="Scene {{ $sceneNum }}"
-                             class="w-32 h-20 object-cover rounded-lg flex-shrink-0 cursor-pointer"
-                             onclick="jumpToScene({{ $i }})"
-                             loading="lazy"
-                             decoding="async">
-                        @endif
+                        <div class="w-32 h-20 rounded-lg flex-shrink-0 cursor-pointer bg-gray-800 overflow-hidden" onclick="jumpToScene({{ $i }})">
+                            <img id="scene-img-{{ $i }}" alt="Scene {{ $sceneNum }}" class="w-full h-full object-cover" style="opacity:0;transition:opacity 0.3s;">
+                        </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 mb-2 flex-wrap">
                                 <span class="text-white text-sm font-bold">Scene {{ $sceneNum }}</span>
@@ -345,6 +400,7 @@
 
         var SCENES = @json($scenes);
         var PROJECT_ID = {{ $project->id }};
+        var KB_EFFECTS = ['kb-zoom-in', 'kb-zoom-out', 'kb-pan-right', 'kb-pan-left', 'kb-pan-up'];
 
         var currentScene = -1;
         var isPlaying = false;
@@ -354,22 +410,75 @@
         var fallbackTimer = null;
         var currentUtterance = null;
         var subtitlesEnabled = true;
+        var preloadedImages = {};
+        var allImagesReady = false;
 
-        var imgCache = {};
+        function preloadAllImages() {
+            var total = SCENES.length;
+            var loaded = 0;
+            var concurrency = 3;
+            var queue = [];
+            for (var i = 0; i < total; i++) queue.push(i);
 
-        function getSceneImage(index) {
-            if (imgCache[index]) return imgCache[index];
-            var scene = SCENES[index];
-            if (!scene || !scene.image_url) return null;
-            var img = new Image();
-            img.src = scene.image_url;
-            img.className = 'hidden-img';
-            imgCache[index] = img;
-            return img;
+            function loadNext() {
+                if (queue.length === 0) return;
+                var idx = queue.shift();
+                var scene = SCENES[idx];
+                if (!scene || !scene.image_url) {
+                    loaded++;
+                    updatePreloadUI(loaded, total);
+                    loadNext();
+                    return;
+                }
+                var img = new Image();
+                img.onload = function() {
+                    preloadedImages[idx] = img;
+                    loaded++;
+                    updatePreloadUI(loaded, total);
+                    applyToDOM(idx, img.src);
+                    loadNext();
+                };
+                img.onerror = function() {
+                    loaded++;
+                    updatePreloadUI(loaded, total);
+                    loadNext();
+                };
+                img.src = scene.image_url;
+            }
+
+            for (var c = 0; c < Math.min(concurrency, total); c++) {
+                loadNext();
+            }
         }
 
-        for (var i = 0; i < Math.min(3, SCENES.length); i++) {
-            getSceneImage(i);
+        function applyToDOM(idx, src) {
+            var thumb = document.getElementById('thumb-' + idx);
+            if (thumb) { thumb.src = src; thumb.style.opacity = '1'; }
+            var sceneImg = document.getElementById('scene-img-' + idx);
+            if (sceneImg) { sceneImg.src = src; sceneImg.style.opacity = '1'; }
+        }
+
+        function updatePreloadUI(loaded, total) {
+            var pct = Math.round((loaded / total) * 100);
+            var fill = document.getElementById('preload-fill');
+            var count = document.getElementById('preload-count');
+            var label = document.getElementById('preload-label');
+            if (fill) fill.style.width = pct + '%';
+            if (count) count.textContent = loaded + ' / ' + total;
+            if (loaded >= total) {
+                allImagesReady = true;
+                if (label) label.textContent = 'Pret !';
+                setTimeout(function() {
+                    var overlay = document.getElementById('preload-overlay');
+                    if (overlay) overlay.classList.add('done');
+                }, 400);
+            }
+        }
+
+        preloadAllImages();
+
+        function getKBEffect(index) {
+            return KB_EFFECTS[index % KB_EFFECTS.length];
         }
 
         function showScene(index) {
@@ -383,20 +492,22 @@
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
-            screen.querySelectorAll('img.active-img').forEach(function(img) {
-                img.classList.remove('active-img');
-                img.classList.add('hidden-img');
-                setTimeout(function() { img.remove(); }, 1000);
+            screen.querySelectorAll('img.active-img').forEach(function(el) {
+                el.classList.remove('active-img');
+                KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
+                el.classList.add('hidden-img');
+                setTimeout(function() { el.remove(); }, 1000);
             });
 
-            var img = getSceneImage(index);
-            if (img) {
-                var clone = img.cloneNode();
+            var cached = preloadedImages[index];
+            if (cached) {
+                var clone = cached.cloneNode();
                 clone.className = 'hidden-img';
                 screen.insertBefore(clone, overlay);
                 clone.offsetHeight;
                 clone.classList.remove('hidden-img');
                 clone.classList.add('active-img');
+                clone.classList.add(getKBEffect(index));
             }
 
             var subtitleText = document.getElementById('subtitle-text');
@@ -419,11 +530,13 @@
             var pct = ((index + 1) / SCENES.length) * 100;
             document.getElementById('progress-fill').style.width = pct + '%';
 
-            document.querySelectorAll('.scene-thumb').forEach(function(t) { t.classList.remove('active-thumb'); });
-            var thumb = document.getElementById('thumb-' + index);
-            if (thumb) {
-                thumb.classList.add('active-thumb');
-                thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            document.querySelectorAll('.scene-thumb, [id^="thumb-wrap-"]').forEach(function(t) {
+                t.style.borderColor = 'transparent';
+            });
+            var thumbWrap = document.getElementById('thumb-wrap-' + index);
+            if (thumbWrap) {
+                thumbWrap.style.borderColor = '#a855f7';
+                thumbWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
             }
 
             document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
@@ -431,9 +544,6 @@
             if (card) card.classList.add('active-scene');
 
             currentScene = index;
-
-            getSceneImage(index + 1);
-            getSceneImage(index + 2);
         }
 
         function getAudio(index) {
