@@ -115,6 +115,12 @@
             </div>
         @endif
 
+        @if(session('error'))
+            <div class="card-glass rounded-xl p-4 mb-6 border border-red-500/30 text-red-300 text-sm">
+                {{ session('error') }}
+            </div>
+        @endif
+
         <div id="form-section" class="card-glass rounded-2xl p-8 fade-in-up" style="animation-delay:0.2s">
             <h2 class="text-white text-xl font-semibold mb-6 flex items-center gap-2">
                 <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -328,6 +334,8 @@
         let projectId = null;
         let startedAt = null;
         let selectedStyle = 'cartoon';
+        let pollFailureCount = 0;
+        const MAX_POLL_FAILURES = 5;
 
         const themeInput = document.getElementById('theme');
         const charCount = document.getElementById('char-count');
@@ -376,7 +384,18 @@
                     body: JSON.stringify({ theme: theme, style: selectedStyle }),
                 });
 
-                var data = await res.json();
+                if (res.status === 419) {
+                    window.location.reload();
+                    return;
+                }
+
+                var raw = await res.text();
+                var data;
+                try {
+                    data = raw ? JSON.parse(raw) : {};
+                } catch (parseErr) {
+                    data = { message: raw || 'Erreur serveur.' };
+                }
 
                 if (!res.ok || !data.success) {
                     throw new Error(data.errors?.theme?.[0] || data.message || 'Erreur serveur.');
@@ -410,6 +429,9 @@
         }
 
         function startPolling() {
+            clearInterval(pollTimer);
+            clearInterval(timerInterval);
+            pollFailureCount = 0;
             startTimer();
             poll();
             pollTimer = setInterval(poll, POLL_INTERVAL);
@@ -420,9 +442,18 @@
                 var res = await fetch('{{ url("/video/status") }}/' + projectId, {
                     headers: { 'Accept': 'application/json' },
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    pollFailureCount++;
+                    if (pollFailureCount >= MAX_POLL_FAILURES) {
+                        clearInterval(pollTimer);
+                        clearInterval(timerInterval);
+                        showPipelineError('Connexion au serveur instable. Rechargez la page pour reprendre le suivi.');
+                    }
+                    return;
+                }
 
                 var data = await res.json();
+                pollFailureCount = 0;
                 updatePipeline(data);
 
                 if (data.status === 'done') {
@@ -434,7 +465,14 @@
                     clearInterval(timerInterval);
                     showPipelineError(data.error_message || 'Erreur inconnue dans le pipeline.');
                 }
-            } catch (err) {}
+            } catch (err) {
+                pollFailureCount++;
+                if (pollFailureCount >= MAX_POLL_FAILURES) {
+                    clearInterval(pollTimer);
+                    clearInterval(timerInterval);
+                    showPipelineError('Le suivi a ete interrompu. Rechargez la page pour verifier l\'avancement.');
+                }
+            }
         }
 
         function updatePipeline(data) {
@@ -509,6 +547,7 @@
             if (document.hidden) {
                 clearInterval(pollTimer);
             } else if (projectId) {
+                clearInterval(pollTimer);
                 poll();
                 pollTimer = setInterval(poll, POLL_INTERVAL);
             }

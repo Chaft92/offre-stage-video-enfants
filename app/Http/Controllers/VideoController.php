@@ -25,7 +25,7 @@ class VideoController extends Controller
 
         $project = VideoProject::create([
             'theme'  => trim($data['theme']),
-            'status' => 'processing',
+            'status' => 'pending',
         ]);
 
         $webhookUrl = config('services.n8n.webhook_url');
@@ -40,12 +40,12 @@ class VideoController extends Controller
         }
 
         try {
-            Http::withHeaders([
+            $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'X-N8N-Secret' => config('services.n8n.secret', ''),
             ])
             ->connectTimeout(10)
-            ->timeout(15)
+            ->timeout(20)
             ->post($webhookUrl, [
                 'project_id'   => $project->id,
                 'theme'        => $project->theme,
@@ -54,17 +54,42 @@ class VideoController extends Controller
                 'error_url'    => route('n8n.error'),
                 'step_url'     => route('n8n.step'),
             ]);
-        } catch (\Exception $e) {
-            Log::warning('N8N webhook call exception (workflow may still run)', [
+
+            if (! $response->successful()) {
+                throw new \RuntimeException('HTTP ' . $response->status());
+            }
+
+            $executionId = null;
+            try {
+                $executionId = $response->json('executionId');
+            } catch (\Throwable) {
+            }
+
+            $project->update([
+                'status'           => 'processing',
+                'current_step'     => 1,
+                'n8n_execution_id' => is_string($executionId) && $executionId !== '' ? $executionId : null,
+                'error_message'    => null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Echec declenchement N8N', [
                 'project_id' => $project->id,
                 'error'      => $e->getMessage(),
             ]);
+
+            $project->markFailed('Impossible de demarrer le pipeline.');
+
+            return response()->json([
+                'success'    => false,
+                'project_id' => $project->id,
+                'message'    => 'Impossible de contacter le pipeline. Reessayez dans quelques instants.',
+            ], 502);
         }
 
         return response()->json([
             'success'    => true,
             'project_id' => $project->id,
-            'status'     => $project->status,
+            'status'     => 'processing',
         ], 201);
     }
 

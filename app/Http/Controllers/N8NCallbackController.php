@@ -26,22 +26,37 @@ class N8NCallbackController extends Controller
 
         $project = VideoProject::findOrFail($data['project_id']);
 
-        if ($project->isDone()) {
-            return response()->json(['success' => true, 'message' => 'Projet deja complete.']);
+        $scenes = array_values($data['scenes_json']);
+        usort($scenes, function ($a, $b) {
+            return (int) ($a['scene_number'] ?? 0) <=> (int) ($b['scene_number'] ?? 0);
+        });
+
+        if (! $this->hasValidSceneContract($scenes)) {
+            $project->markFailed('Scenes incompletes recues depuis le pipeline.');
+            return response()->json(['success' => false, 'message' => 'Invalid scenes payload.'], 422);
         }
 
-        $scenes = $data['scenes_json'];
+        if ($project->isDone()) {
+            $existingCount = count($project->scenes_json ?? []);
+            if ($existingCount >= count($scenes)) {
+                return response()->json(['success' => true, 'message' => 'Projet deja complete.']);
+            }
+        }
+
         foreach ($scenes as $i => &$scene) {
             $visualPrompt = $scene['visual_description'] ?? 'A colorful cartoon scene for children';
             $encodedPrompt = rawurlencode($visualPrompt);
-            $seed = $project->id * 100 + ($scene['scene_number'] ?? $i);
+            $seed = $project->id * 100 + ($scene['scene_number'] ?? $i + 1);
             $scene['image_url'] = "https://image.pollinations.ai/prompt/{$encodedPrompt}?width=1280&height=720&nologo=true&seed={$seed}";
         }
+        unset($scene);
+
+        $videoUrl = trim((string) ($data['video_url'] ?? ''));
 
         $project->update([
             'status'        => 'done',
             'current_step'  => 5,
-            'video_url'     => 'slideshow',
+            'video_url'     => $videoUrl !== '' ? $videoUrl : 'slideshow',
             'story_text'    => $data['story_text'],
             'moral'         => $data['moral'] ?? null,
             'scenes_json'   => $scenes,
@@ -63,6 +78,10 @@ class N8NCallbackController extends Controller
         ]);
 
         $project = VideoProject::findOrFail($data['project_id']);
+
+        if ($project->isDone()) {
+            return response()->json(['success' => true, 'message' => 'Projet deja complete.']);
+        }
         $project->markFailed($data['error_message']);
 
         Log::error("Projet #{$project->id} en erreur.", ['error' => $data['error_message']]);
@@ -85,5 +104,33 @@ class N8NCallbackController extends Controller
             ]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function hasValidSceneContract(array $scenes): bool
+    {
+        $count = count($scenes);
+        if ($count < 8 || $count > 20) {
+            return false;
+        }
+
+        $numbers = [];
+        foreach ($scenes as $scene) {
+            $number = (int) ($scene['scene_number'] ?? 0);
+            if ($number < 1 || isset($numbers[$number])) {
+                return false;
+            }
+            $numbers[$number] = true;
+        }
+
+        ksort($numbers);
+        $expected = 1;
+        foreach (array_keys($numbers) as $number) {
+            if ($number !== $expected) {
+                return false;
+            }
+            $expected++;
+        }
+
+        return true;
     }
 }
