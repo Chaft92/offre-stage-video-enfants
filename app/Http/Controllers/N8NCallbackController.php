@@ -17,6 +17,8 @@ class N8NCallbackController extends Controller
             'video_url'                        => ['required', 'string', 'max:1000'],
             'story_text'                       => ['required', 'string', 'max:50000'],
             'moral'                            => ['nullable', 'string', 'max:1000'],
+            'characters'                       => ['nullable', 'string', 'max:2000'],
+            'setting'                          => ['nullable', 'string', 'max:2000'],
             'scenes_json'                      => ['required', 'array', 'min:1', 'max:25'],
             'scenes_json.*.scene_number'       => ['required', 'integer', 'min:1'],
             'scenes_json.*.narration'          => ['required', 'string'],
@@ -53,11 +55,14 @@ class N8NCallbackController extends Controller
         $pollinationsVideo = app(PollinationsVideoService::class);
         $hasKey = $pollinationsVideo->hasApiKey();
 
+        $characters = trim((string) ($data['characters'] ?? ''));
+        $setting = trim((string) ($data['setting'] ?? ''));
+
         foreach ($scenes as $i => &$scene) {
-            $scene['voice'] = $this->voiceForSceneIndex($i, (string) ($scene['part'] ?? 'development'));
+            $scene['voice'] = $this->voiceForSceneIndex($i, (string) ($scene['part'] ?? 'development'), (string) ($scene['voice'] ?? ''));
 
             $sceneNum = (int) ($scene['scene_number'] ?? $i + 1);
-            $imagePrompt = $this->buildImagePrompt($scene, $i);
+            $imagePrompt = $this->buildImagePrompt($scene, $i, $characters, $setting);
             $seed = $project->id * 100 + $sceneNum;
 
             if ($hasKey) {
@@ -243,27 +248,18 @@ class N8NCallbackController extends Controller
         return $scenes;
     }
 
-    private function voiceForSceneIndex(int $index, string $part): string
+    private function voiceForSceneIndex(int $index, string $part, string $groqVoice = ''): string
     {
-        $pattern = [
-            'narrateur',
-            'narratrice',
-            'enfant_fille',
-            'narrateur',
-            'enfant_garcon',
-            'narratrice',
-            'enfant_fille',
-            'narrateur',
-        ];
+        $validVoices = ['narratrice', 'narrateur', 'enfant_fille', 'enfant_garcon'];
 
-        if ($part === 'conclusion' && $index >= 6) {
-            return $index === 6 ? 'narratrice' : 'narrateur';
+        if ($groqVoice !== '' && in_array($groqVoice, $validVoices, true)) {
+            return $groqVoice;
         }
 
-        return $pattern[$index % count($pattern)];
+        return 'narrateur';
     }
 
-    private function buildImagePrompt(array $scene, int $index): string
+    private function buildImagePrompt(array $scene, int $index, string $characters = '', string $setting = ''): string
     {
         $base = trim((string) ($scene['image_prompt'] ?? ''));
         if ($base === '') {
@@ -273,9 +269,17 @@ class N8NCallbackController extends Controller
         $base = preg_replace('/\s+/', ' ', $base ?? '') ?: '';
         $base = mb_substr($base, 0, 320);
 
+        $visualBible = '';
+        if ($characters !== '') {
+            $visualBible .= 'Characters: ' . $characters . '. ';
+        }
+        if ($setting !== '') {
+            $visualBible .= 'Setting: ' . $setting . '. ';
+        }
+
         $stylePrefix = 'cinematic animated movie still, highly detailed, coherent character design, soft global illumination';
         $sceneTag = 'scene ' . ($index + 1);
 
-        return trim($stylePrefix . ', ' . $sceneTag . ', ' . $base);
+        return mb_substr(trim($stylePrefix . ', ' . $sceneTag . ', ' . $visualBible . $base), 0, 800);
     }
 }
