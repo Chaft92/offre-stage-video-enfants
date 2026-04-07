@@ -260,8 +260,8 @@
                             <div class="step-line w-0.5 h-8 bg-gray-700 my-1"></div>
                         </div>
                         <div class="pt-2 pb-6">
-                            <p class="text-white font-medium">Generation des illustrations</p>
-                            <p class="text-gray-400 text-sm mt-1">Images generees par Pollinations.ai dans le style choisi</p>
+                            <p class="text-white font-medium">Generation des scenes video</p>
+                            <p class="text-gray-400 text-sm mt-1">Clips video generes pour chaque scene puis assembles dans le lecteur final</p>
                         </div>
                     </div>
 
@@ -483,7 +483,7 @@
                 'Initialisation du pipeline...',
                 'L\'IA genere l\'histoire...',
                 'Creation des scenes illustrees...',
-                'Generation des illustrations...',
+                'Generation des scenes video...',
                 'Synthese vocale (ElevenLabs)...',
                 'Film anime pret ! Redirection...',
             ];
@@ -492,7 +492,11 @@
             if (msgEl) {
                 if (status === 'done') msgEl.textContent = 'Film pret ! Redirection...';
                 else if (status === 'error') msgEl.textContent = 'Erreur dans le pipeline.';
-                else msgEl.textContent = stepMessages[currentStep] || stepMessages[0];
+                else if (currentStep === 3 && data.scene_count && data.video_ready !== undefined) {
+                    msgEl.textContent = 'Generation des scenes video... ' + data.video_ready + ' / ' + data.scene_count;
+                } else {
+                    msgEl.textContent = stepMessages[currentStep] || stepMessages[0];
+                }
             }
 
             for (var s = 1; s <= 5; s++) {

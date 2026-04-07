@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\VideoProject;
+use App\Services\RunwayVideoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -50,6 +51,42 @@ class N8NCallbackController extends Controller
             $scene['image_url'] = "https://image.pollinations.ai/prompt/{$encodedPrompt}?width=1280&height=720&nologo=true&seed={$seed}";
         }
         unset($scene);
+
+        $runway = app(RunwayVideoService::class);
+        if ($runway->enabled()) {
+            $createdTasks = 0;
+
+            foreach ($scenes as $i => &$scene) {
+                $sceneSeed = $project->id * 1000 + ((int) ($scene['scene_number'] ?? $i + 1));
+                $taskId = $runway->createTaskForScene($scene, $sceneSeed);
+                if ($taskId === null) {
+                    $project->markFailed('La generation Runway des scenes video a echoue.');
+                    return response()->json(['success' => false, 'message' => 'Runway task dispatch failed.'], 502);
+                }
+
+                $scene['runway_task_id'] = $taskId;
+                $scene['video_status'] = 'pending';
+                $scene['video_url'] = null;
+                $createdTasks++;
+            }
+            unset($scene);
+
+            $project->update([
+                'status'        => 'processing',
+                'current_step'  => 3,
+                'video_url'     => null,
+                'story_text'    => $data['story_text'],
+                'moral'         => $data['moral'] ?? null,
+                'scenes_json'   => $scenes,
+                'error_message' => null,
+            ]);
+
+            Log::info("Projet #{$project->id} Runway lance - {$createdTasks} scenes video.", [
+                'theme' => $project->theme,
+            ]);
+
+            return response()->json(['success' => true]);
+        }
 
         $videoUrl = trim((string) ($data['video_url'] ?? ''));
 

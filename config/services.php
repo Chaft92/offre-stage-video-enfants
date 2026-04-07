@@ -38,4 +38,13 @@ return [
         'model'   => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
     ],
 
+    'runway' => [
+        'api_key'  => env('RUNWAYML_API_SECRET'),
+        'base_url' => env('RUNWAYML_BASE_URL', 'https://api.dev.runwayml.com'),
+        'version'  => env('RUNWAYML_API_VERSION', '2024-11-06'),
+        'model'    => env('RUNWAYML_VIDEO_MODEL', 'gen4_turbo'),
+        'ratio'    => env('RUNWAYML_VIDEO_RATIO', '1280:720'),
+        'duration' => (int) env('RUNWAYML_VIDEO_DURATION', 5),
+    ],
+
 ];

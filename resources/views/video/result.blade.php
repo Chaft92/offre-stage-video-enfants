@@ -39,7 +39,8 @@
             background: #111;
             overflow: hidden;
         }
-        .cinema-screen img {
+        .cinema-screen img,
+        .cinema-screen video {
             position: absolute;
             inset: 0;
             width: 100%;
@@ -47,8 +48,8 @@
             object-fit: cover;
             transition: opacity 0.8s ease-in-out;
         }
-        .cinema-screen img.hidden-img { opacity: 0; }
-        .cinema-screen img.active-img { opacity: 1; }
+        .cinema-screen .hidden-media { opacity: 0; }
+        .cinema-screen .active-media { opacity: 1; }
 
         @keyframes kb-zoom-in {
             0% { transform: scale(1) translate(0, 0); }
@@ -377,6 +378,11 @@
                                 <span class="text-white text-sm font-bold">Scene {{ $sceneNum }}</span>
                                 <span class="scene-badge-part {{ $partClass }}">{{ $partLabel }}</span>
                                 <span class="voice-badge">{{ $voiceLabel }}</span>
+                                @if(!empty($scene['video_url']))
+                                <span class="scene-badge-part part-development">Video</span>
+                                @else
+                                <span class="scene-badge-part part-conclusion">Image</span>
+                                @endif
                                 <span class="text-gray-500 text-xs ml-auto">{{ $scene['duration_seconds'] ?? 10 }}s</span>
                             </div>
                             <p class="text-gray-200 text-sm mb-1">{{ $scene['narration'] ?? '' }}</p>
@@ -416,6 +422,12 @@
         function preloadAllImages() {
             var total = SCENES.length;
             var loaded = 0;
+
+            if (total === 0) {
+                updatePreloadUI(1, 1);
+                return;
+            }
+
             var concurrency = 3;
             var queue = [];
             for (var i = 0; i < total; i++) queue.push(i);
@@ -492,22 +504,44 @@
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
-            screen.querySelectorAll('img.active-img').forEach(function(el) {
-                el.classList.remove('active-img');
+            screen.querySelectorAll('.active-media').forEach(function(el) {
+                el.classList.remove('active-media');
                 KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
-                el.classList.add('hidden-img');
+                el.classList.add('hidden-media');
+                if (el.tagName === 'VIDEO') {
+                    try { el.pause(); } catch (e) {}
+                }
                 setTimeout(function() { el.remove(); }, 1000);
             });
 
-            var cached = preloadedImages[index];
-            if (cached) {
-                var clone = cached.cloneNode();
-                clone.className = 'hidden-img';
-                screen.insertBefore(clone, overlay);
-                clone.offsetHeight;
-                clone.classList.remove('hidden-img');
-                clone.classList.add('active-img');
-                clone.classList.add(getKBEffect(index));
+            var sceneVideoUrl = (scene.video_url || '').trim();
+            if (sceneVideoUrl !== '') {
+                var video = document.createElement('video');
+                video.src = sceneVideoUrl;
+                video.className = 'hidden-media';
+                video.preload = 'auto';
+                video.autoplay = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.loop = true;
+                video.setAttribute('playsinline', 'playsinline');
+                video.setAttribute('webkit-playsinline', 'webkit-playsinline');
+                screen.insertBefore(video, overlay);
+                video.offsetHeight;
+                video.classList.remove('hidden-media');
+                video.classList.add('active-media');
+                video.play().catch(function() {});
+            } else {
+                var cached = preloadedImages[index];
+                if (cached) {
+                    var clone = cached.cloneNode();
+                    clone.className = 'hidden-media';
+                    screen.insertBefore(clone, overlay);
+                    clone.offsetHeight;
+                    clone.classList.remove('hidden-media');
+                    clone.classList.add('active-media');
+                    clone.classList.add(getKBEffect(index));
+                }
             }
 
             var subtitleText = document.getElementById('subtitle-text');

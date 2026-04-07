@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\VideoProject;
+use App\Services\RunwayVideoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -95,16 +96,40 @@ class VideoController extends Controller
 
     public function status(int $id): JsonResponse
     {
-        $project = VideoProject::select([
-            'id', 'status', 'current_step', 'theme', 'video_url', 'error_message',
-        ])->findOrFail($id);
+        $project = VideoProject::findOrFail($id);
 
-        return response()->json($project);
+        if ($project->isProcessing()) {
+            app(RunwayVideoService::class)->syncProject($project);
+            $project->refresh();
+        }
+
+        $scenes = $project->scenes_json ?? [];
+        $videoReadyCount = collect($scenes)->filter(function ($scene) {
+            return ! empty($scene['video_url']);
+        })->count();
+
+        $payload = [
+            'id'              => $project->id,
+            'status'          => $project->status,
+            'current_step'    => $project->current_step,
+            'theme'           => $project->theme,
+            'video_url'       => $project->video_url,
+            'error_message'   => $project->error_message,
+            'scene_count'     => count($scenes),
+            'video_ready'     => $videoReadyCount,
+        ];
+
+        return response()->json($payload);
     }
 
     public function show(int $id)
     {
         $project = VideoProject::findOrFail($id);
+
+        if ($project->isProcessing()) {
+            app(RunwayVideoService::class)->syncProject($project);
+            $project->refresh();
+        }
 
         if ($project->isProcessing()) {
             return redirect()->route('video.index')
