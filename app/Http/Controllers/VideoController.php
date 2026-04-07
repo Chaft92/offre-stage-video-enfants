@@ -319,7 +319,11 @@ class VideoController extends Controller
             abort(503, 'Service video indisponible.');
         }
 
-        $prompt = $pollinationsVideo->extractPrompt($scene);
+        // Use image_prompt (scene-specific + character tag) for video too, so each scene gets a unique video
+        $prompt = trim((string) ($scene['image_prompt'] ?? ''));
+        if ($prompt === '') {
+            $prompt = $pollinationsVideo->extractPrompt($scene);
+        }
         if ($prompt === '') {
             abort(404, 'Aucune description pour cette scene.');
         }
@@ -353,7 +357,7 @@ class VideoController extends Controller
             'enfant_garcon' => 'echo',
         ];
 
-        $voiceType = in_array($scene['voice'] ?? '', array_keys($voiceMap)) ? $scene['voice'] : 'narratrice';
+        $voiceType = in_array($scene['voice'] ?? '', array_keys($voiceMap)) ? $scene['voice'] : 'narrateur';
         $voice = $voiceMap[$voiceType];
 
         $cacheDir  = storage_path('app/tts');

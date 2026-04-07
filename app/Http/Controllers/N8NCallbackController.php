@@ -267,19 +267,24 @@ class N8NCallbackController extends Controller
         }
 
         $base = preg_replace('/\s+/', ' ', $base ?? '') ?: '';
-        $base = mb_substr($base, 0, 320);
+        $base = mb_substr($base, 0, 300);
 
-        $visualBible = '';
+        // Build a SHORT character tag (max ~120 chars) so scene-specific content dominates
+        $charTag = '';
         if ($characters !== '') {
-            $visualBible .= 'Characters: ' . $characters . '. ';
+            $charTag .= mb_substr($characters, 0, 80);
         }
         if ($setting !== '') {
-            $visualBible .= 'Setting: ' . $setting . '. ';
+            $charTag .= ($charTag !== '' ? ', ' : '') . mb_substr($setting, 0, 60);
         }
 
-        $stylePrefix = 'cinematic animated movie still, highly detailed, coherent character design, soft global illumination';
-        $sceneTag = 'scene ' . ($index + 1);
+        // Scene-specific action FIRST, then style + character context AFTER
+        $prompt = $base;
+        if ($charTag !== '') {
+            $prompt .= ', ' . $charTag;
+        }
+        $prompt .= ', cinematic animated movie still, coherent character design, soft lighting, scene ' . ($index + 1);
 
-        return mb_substr(trim($stylePrefix . ', ' . $sceneTag . ', ' . $visualBible . $base), 0, 800);
+        return mb_substr(trim($prompt), 0, 500);
     }
 }
