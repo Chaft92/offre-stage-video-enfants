@@ -78,7 +78,10 @@ class PollinationsVideoService
         $prompt = mb_substr($prompt, 0, 500);
         $encodedPrompt = rawurlencode($prompt);
 
+        $imageModel = (string) config('services.pollinations_video.image_model', 'flux');
+
         $params = [
+            'model'  => $imageModel,
             'width'  => $width,
             'height' => $height,
             'nologo' => 'true',

@@ -52,11 +52,12 @@ return [
     ],
 
     'pollinations_video' => [
-        'enabled'      => filter_var(env('POLLINATIONS_VIDEO_ENABLED', true), FILTER_VALIDATE_BOOL),
-        'api_key'      => env('POLLINATIONS_API_KEY'),
-        'model'        => env('POLLINATIONS_VIDEO_MODEL', 'ltx-2'),
-        'duration'     => (int) env('POLLINATIONS_VIDEO_DURATION', 5),
-        'aspect_ratio' => env('POLLINATIONS_VIDEO_ASPECT_RATIO', ''),
+        'enabled'       => filter_var(env('POLLINATIONS_VIDEO_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'api_key'       => env('POLLINATIONS_API_KEY'),
+        'model'         => env('POLLINATIONS_VIDEO_MODEL', 'ltx-2'),
+        'image_model'   => env('POLLINATIONS_IMAGE_MODEL', 'flux'),
+        'duration'      => (int) env('POLLINATIONS_VIDEO_DURATION', 5),
+        'aspect_ratio'  => env('POLLINATIONS_VIDEO_ASPECT_RATIO', ''),
     ],
 
 ];
