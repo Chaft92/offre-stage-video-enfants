@@ -92,7 +92,7 @@
             bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
-            max-width: 80%;
+            max-width: 70%;
             text-align: center;
             pointer-events: none;
             z-index: 10;
@@ -101,14 +101,14 @@
         .subtitle-bar.hidden-sub { opacity: 0; }
         .subtitle-text {
             display: inline-block;
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.85);
             color: #fff;
-            font-size: 1.1rem;
-            font-weight: 500;
-            padding: 0.4rem 1rem;
-            border-radius: 6px;
-            line-height: 1.5;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            font-size: 0.8rem;
+            font-weight: 400;
+            padding: 0.3rem 0.8rem;
+            border-radius: 4px;
+            line-height: 1.4;
+            text-shadow: none;
         }
 
         .cinema-controls {
@@ -568,16 +568,18 @@
 
             var sceneVideoUrl = (scene.video_url || '').trim();
             if (sceneVideoUrl !== '') {
+                showImageForScene(screen, index, scene, overlay);
+
                 var video = document.createElement('video');
                 video.src = sceneVideoUrl;
                 video.className = 'hidden-media';
                 video.preload = 'auto';
-                video.autoplay = true;
                 video.muted = true;
                 video.playsInline = true;
                 video.loop = true;
                 video.setAttribute('playsinline', 'playsinline');
                 video.setAttribute('webkit-playsinline', 'webkit-playsinline');
+                video.style.zIndex = '3';
 
                 var videoFailed = false;
                 function fallbackToImage() {
@@ -585,18 +587,25 @@
                     videoFailed = true;
                     try { video.pause(); } catch(e) {}
                     video.remove();
-                    showImageForScene(screen, index, scene, overlay);
                 }
 
                 video.onerror = fallbackToImage;
-                var videoLoadTimeout = setTimeout(fallbackToImage, 15000);
-                video.onloadeddata = function() { clearTimeout(videoLoadTimeout); };
+                var videoLoadTimeout = setTimeout(fallbackToImage, 60000);
+
+                video.onloadeddata = function() {
+                    clearTimeout(videoLoadTimeout);
+                    screen.querySelectorAll('img.active-media').forEach(function(img) {
+                        img.classList.remove('active-media');
+                        KB_EFFECTS.forEach(function(k) { img.classList.remove(k); });
+                        img.classList.add('hidden-media');
+                        setTimeout(function() { img.remove(); }, 1000);
+                    });
+                    video.classList.remove('hidden-media');
+                    video.classList.add('active-media');
+                    video.play().catch(function() { fallbackToImage(); });
+                };
 
                 screen.insertBefore(video, overlay);
-                video.offsetHeight;
-                video.classList.remove('hidden-media');
-                video.classList.add('active-media');
-                video.play().catch(function() { fallbackToImage(); });
             } else {
                 showImageForScene(screen, index, scene, overlay);
             }

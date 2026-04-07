@@ -192,64 +192,86 @@ class VideoController extends Controller
         $videoUrl = $project->video_url   ?? '';
         $theme    = $project->theme       ?? 'video';
 
-        $tmpFile = tempnam(sys_get_temp_dir(), 'video_zip_');
-        $zip = new ZipArchive();
-        $zip->open($tmpFile, ZipArchive::OVERWRITE);
-
-        $zip->addFromString('histoire_complete.txt', $story);
-
-        $sep = str_repeat('=', 64);
-        $sceneCount = count($scenes);
-        $script = "SCRIPT COMPLET\n{$sep}\nTheme : {$theme}\n{$sep}\n\n";
-        foreach ($scenes as $s) {
-            $n    = str_pad((string) ($s['scene_number'] ?? '?'), 2, '0', STR_PAD_LEFT);
-            $dur  = $s['duration_seconds'] ?? 15;
-            $vis  = $s['visual_description'] ?? '';
-            $narr = $s['narration'] ?? '';
-            $script .= "SCENE {$n} ({$dur}s)\n[Visuel]    {$vis}\n[Narration] {$narr}\n\n";
-        }
-        $zip->addFromString("script_{$sceneCount}_scenes.txt", $script);
-
-        foreach ($scenes as $s) {
-            $n    = str_pad((string) ($s['scene_number'] ?? 0), 2, '0', STR_PAD_LEFT);
-            $narr = $s['narration'] ?? '';
-            $zip->addFromString("scenes/scene_{$n}_narration.txt", $narr);
+        if (!class_exists('ZipArchive')) {
+            $sep = str_repeat('=', 64);
+            $sceneCount = count($scenes);
+            $content = "PACK COMPLET - AI Kids Video Generator\nFait par Julien YILDIZ\n{$sep}\n\nTheme : {$theme}\n\n{$sep}\nHISTOIRE\n{$sep}\n{$story}\n\n{$sep}\nSCRIPT\n{$sep}\n\n";
+            foreach ($scenes as $s) {
+                $n    = str_pad((string) ($s['scene_number'] ?? '?'), 2, '0', STR_PAD_LEFT);
+                $dur  = $s['duration_seconds'] ?? 15;
+                $vis  = $s['visual_description'] ?? '';
+                $narr = $s['narration'] ?? '';
+                $content .= "SCENE {$n} ({$dur}s)\n[Visuel]    {$vis}\n[Narration] {$narr}\n\n";
+            }
+            $slug = substr(trim(preg_replace('/[^a-z0-9]+/', '_', strtolower($theme)), '_'), 0, 40);
+            return response($content, 200, [
+                'Content-Type'        => 'text/plain; charset=utf-8',
+                'Content-Disposition' => 'attachment; filename="video_' . $id . '_' . $slug . '.txt"',
+            ]);
         }
 
-        $hasVideo = $videoUrl
-            && !str_contains($videoUrl, 'placeholder')
-            && !str_contains($videoUrl, 'demo-mode')
-            && filter_var($videoUrl, FILTER_VALIDATE_URL);
+        try {
+            $tmpFile = tempnam(sys_get_temp_dir(), 'video_zip_');
+            $zip = new ZipArchive();
+            $zip->open($tmpFile, ZipArchive::OVERWRITE);
 
-        if ($hasVideo) {
-            $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
+            $zip->addFromString('histoire_complete.txt', $story);
+
+            $sep = str_repeat('=', 64);
+            $sceneCount = count($scenes);
+            $script = "SCRIPT COMPLET\n{$sep}\nTheme : {$theme}\n{$sep}\n\n";
+            foreach ($scenes as $s) {
+                $n    = str_pad((string) ($s['scene_number'] ?? '?'), 2, '0', STR_PAD_LEFT);
+                $dur  = $s['duration_seconds'] ?? 15;
+                $vis  = $s['visual_description'] ?? '';
+                $narr = $s['narration'] ?? '';
+                $script .= "SCENE {$n} ({$dur}s)\n[Visuel]    {$vis}\n[Narration] {$narr}\n\n";
+            }
+            $zip->addFromString("script_{$sceneCount}_scenes.txt", $script);
+
+            foreach ($scenes as $s) {
+                $n    = str_pad((string) ($s['scene_number'] ?? 0), 2, '0', STR_PAD_LEFT);
+                $narr = $s['narration'] ?? '';
+                $zip->addFromString("scenes/scene_{$n}_narration.txt", $narr);
+            }
+
+            $hasVideo = $videoUrl
+                && !str_contains($videoUrl, 'placeholder')
+                && !str_contains($videoUrl, 'demo-mode')
+                && filter_var($videoUrl, FILTER_VALIDATE_URL);
+
+            if ($hasVideo) {
+                $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
+            }
+
+            $readme = implode("\n", [
+                'PACK COMPLET - AI Kids Video Generator',
+                'Fait par Julien YILDIZ',
+                str_repeat('=', 48),
+                '',
+                "Theme : {$theme}",
+                "Nombre de scenes : {$sceneCount}",
+                '',
+                'Contenu :',
+                '  histoire_complete.txt             : Histoire narrative generee par IA',
+                "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration)",
+                '  scenes/scene_XX_narration.txt     : Narration individuelle par scene',
+                $hasVideo ? '  video_complete.url                : Lien vers la video finale' : '',
+            ]);
+            $zip->addFromString('README.txt', $readme);
+            $zip->close();
+
+            $slug = substr(trim(preg_replace('/[^a-z0-9]+/', '_', strtolower($theme)), '_'), 0, 40);
+
+            return response()->file($tmpFile, [
+                'Content-Type'        => 'application/zip',
+                'Content-Disposition' => 'attachment; filename="video_' . $id . '_' . $slug . '.zip"',
+            ])->deleteFileAfterSend();
+
+        } catch (\Exception $e) {
+            Log::error('Download zip failed', ['error' => $e->getMessage()]);
+            abort(500, 'Erreur lors de la creation du fichier.');
         }
-
-        $readme = implode("\n", [
-            'PACK COMPLET - AI Kids Video Generator',
-            'Fait par Julien YILDIZ',
-            str_repeat('=', 48),
-            '',
-            "Theme : {$theme}",
-            "Nombre de scenes : {$sceneCount}",
-            '',
-            'Contenu :',
-            '  histoire_complete.txt             : Histoire narrative generee par IA',
-            "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration)",
-            '  scenes/scene_XX_narration.txt     : Narration individuelle par scene',
-            $hasVideo ? '  video_complete.url                : Lien vers la video finale' : '',
-        ]);
-        $zip->addFromString('README.txt', $readme);
-        $zip->close();
-
-        $slug = preg_replace('/[^a-z0-9]+/', '_', strtolower($theme));
-        $slug = trim($slug, '_');
-        $slug = substr($slug, 0, 40);
-
-        return response()->file($tmpFile, [
-            'Content-Type'        => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="video_' . $id . '_' . $slug . '.zip"',
-        ])->deleteFileAfterSend();
     }
 
     public function sceneImage(int $id, int $sceneNumber)
@@ -324,19 +346,15 @@ class VideoController extends Controller
             abort(404, 'Scene introuvable.');
         }
 
-        $voiceMap = (array) config('services.elevenlabs.voices', []);
-        if (empty($voiceMap)) {
-            $voiceMap = [
-                'narratrice'    => 'EXAVITQu4vr4xnSDxMaL',
-                'narrateur'     => 'ErXwobaYiN019PkySvjV',
-                'enfant_fille'  => 'jBpfuIE2acCO8z3wKNLl',
-                'enfant_garcon' => 'yoZ06aMxZJJ28mfd3POQ',
-            ];
-        }
+        $voiceMap = [
+            'narratrice'    => 'nova',
+            'narrateur'     => 'onyx',
+            'enfant_fille'  => 'shimmer',
+            'enfant_garcon' => 'echo',
+        ];
 
-        $allowedVoices = array_keys($voiceMap);
-        $voiceType = in_array($scene['voice'] ?? '', $allowedVoices) ? $scene['voice'] : 'narratrice';
-        $voiceId = $voiceMap[$voiceType];
+        $voiceType = in_array($scene['voice'] ?? '', array_keys($voiceMap)) ? $scene['voice'] : 'narratrice';
+        $voice = $voiceMap[$voiceType];
 
         $cacheDir  = storage_path('app/tts');
         $cacheFile = "{$cacheDir}/tts_{$id}_{$sceneNumber}_{$voiceType}.mp3";
@@ -348,34 +366,24 @@ class VideoController extends Controller
             ]);
         }
 
-        $apiKey = config('services.elevenlabs.api_key');
-        if (empty($apiKey)) {
+        $apiKey = (string) config('services.pollinations_video.api_key', '');
+        if ($apiKey === '') {
             abort(503, 'Service de synthese vocale indisponible.');
         }
 
         try {
-            $voiceSettings = (array) config('services.elevenlabs.settings', []);
+            $text = mb_substr($scene['narration'], 0, 4000);
+            $encodedText = rawurlencode($text);
 
-            $response = Http::withHeaders([
-                'xi-api-key'   => $apiKey,
-                'Content-Type' => 'application/json',
-                'Accept'       => 'audio/mpeg',
-            ])
-            ->timeout(30)
-            ->retry(2, 300)
-            ->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}", [
-                'text'     => $scene['narration'],
-                'model_id' => (string) config('services.elevenlabs.model', 'eleven_multilingual_v2'),
-                'voice_settings' => [
-                    'stability'         => (float) ($voiceSettings['stability'] ?? 0.38),
-                    'similarity_boost'  => (float) ($voiceSettings['similarity_boost'] ?? 0.82),
-                    'style'             => (float) ($voiceSettings['style'] ?? 0.45),
-                    'use_speaker_boost' => (bool) ($voiceSettings['use_speaker_boost'] ?? true),
-                ],
-            ]);
+            $response = Http::timeout(30)
+                ->retry(2, 500)
+                ->get("https://gen.pollinations.ai/audio/{$encodedText}", [
+                    'voice' => $voice,
+                    'key'   => $apiKey,
+                ]);
 
             if ($response->failed()) {
-                Log::error('ElevenLabs TTS failed', ['status' => $response->status()]);
+                Log::error('Pollinations TTS failed', ['status' => $response->status()]);
                 abort(502, 'Erreur synthese vocale.');
             }
 
@@ -390,7 +398,7 @@ class VideoController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('ElevenLabs TTS exception', ['error' => $e->getMessage()]);
+            Log::error('Pollinations TTS exception', ['error' => $e->getMessage()]);
             abort(502, 'Service de synthese vocale indisponible.');
         }
     }
