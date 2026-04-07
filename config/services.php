@@ -31,6 +31,19 @@ return [
     'elevenlabs' => [
         'api_key'  => env('ELEVENLABS_API_KEY'),
         'voice_id' => env('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL'),
+        'model'    => env('ELEVENLABS_MODEL', 'eleven_multilingual_v2'),
+        'voices'   => [
+            'narratrice'    => env('ELEVENLABS_VOICE_NARRATRICE_ID', env('ELEVENLABS_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL')),
+            'narrateur'     => env('ELEVENLABS_VOICE_NARRATEUR_ID', 'ErXwobaYiN019PkySvjV'),
+            'enfant_fille'  => env('ELEVENLABS_VOICE_ENFANT_FILLE_ID', 'jBpfuIE2acCO8z3wKNLl'),
+            'enfant_garcon' => env('ELEVENLABS_VOICE_ENFANT_GARCON_ID', 'yoZ06aMxZJJ28mfd3POQ'),
+        ],
+        'settings' => [
+            'stability'         => (float) env('ELEVENLABS_STABILITY', 0.38),
+            'similarity_boost'  => (float) env('ELEVENLABS_SIMILARITY_BOOST', 0.82),
+            'style'             => (float) env('ELEVENLABS_STYLE', 0.45),
+            'use_speaker_boost' => filter_var(env('ELEVENLABS_SPEAKER_BOOST', true), FILTER_VALIDATE_BOOL),
+        ],
     ],
 
     'groq' => [
@@ -38,13 +51,12 @@ return [
         'model'   => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
     ],
 
-    'runway' => [
-        'api_key'  => env('RUNWAYML_API_SECRET'),
-        'base_url' => env('RUNWAYML_BASE_URL', 'https://api.dev.runwayml.com'),
-        'version'  => env('RUNWAYML_API_VERSION', '2024-11-06'),
-        'model'    => env('RUNWAYML_VIDEO_MODEL', 'gen4_turbo'),
-        'ratio'    => env('RUNWAYML_VIDEO_RATIO', '1280:720'),
-        'duration' => (int) env('RUNWAYML_VIDEO_DURATION', 5),
+    'pollinations_video' => [
+        'enabled'      => filter_var(env('POLLINATIONS_VIDEO_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'api_key'      => env('POLLINATIONS_API_KEY'),
+        'model'        => env('POLLINATIONS_VIDEO_MODEL', 'ltx-2'),
+        'duration'     => (int) env('POLLINATIONS_VIDEO_DURATION', 5),
+        'aspect_ratio' => env('POLLINATIONS_VIDEO_ASPECT_RATIO', ''),
     ],
 
 ];

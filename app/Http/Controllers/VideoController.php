@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\VideoProject;
-use App\Services\RunwayVideoService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -40,13 +40,20 @@ class VideoController extends Controller
             ], 503);
         }
 
+        $project->update([
+            'status'        => 'processing',
+            'current_step'  => 1,
+            'error_message' => null,
+        ]);
+
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'X-N8N-Secret' => config('services.n8n.secret', ''),
             ])
+            ->retry(2, 400)
             ->connectTimeout(10)
-            ->timeout(20)
+            ->timeout(45)
             ->post($webhookUrl, [
                 'project_id'   => $project->id,
                 'theme'        => $project->theme,
@@ -56,14 +63,30 @@ class VideoController extends Controller
                 'step_url'     => route('n8n.step'),
             ]);
 
-            if (! $response->successful()) {
-                throw new \RuntimeException('HTTP ' . $response->status());
-            }
-
             $executionId = null;
             try {
                 $executionId = $response->json('executionId');
             } catch (\Throwable) {
+            }
+
+            if (! $response->successful()) {
+                $status = $response->status();
+
+                if ($status >= 500 || $status === 408) {
+                    Log::warning('Declenchement N8N reponse non-success mais potentiellement lance', [
+                        'project_id' => $project->id,
+                        'status'     => $status,
+                        'body'       => mb_substr((string) $response->body(), 0, 500),
+                    ]);
+
+                    return response()->json([
+                        'success'    => true,
+                        'project_id' => $project->id,
+                        'status'     => 'processing',
+                    ], 202);
+                }
+
+                throw new \RuntimeException('HTTP ' . $status);
             }
 
             $project->update([
@@ -72,6 +95,17 @@ class VideoController extends Controller
                 'n8n_execution_id' => is_string($executionId) && $executionId !== '' ? $executionId : null,
                 'error_message'    => null,
             ]);
+        } catch (ConnectionException $e) {
+            Log::warning('Timeout/connexion declenchement N8N, passage en suivi asynchrone', [
+                'project_id' => $project->id,
+                'error'      => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success'    => true,
+                'project_id' => $project->id,
+                'status'     => 'processing',
+            ], 202);
         } catch (\Throwable $e) {
             Log::error('Echec declenchement N8N', [
                 'project_id' => $project->id,
@@ -99,8 +133,17 @@ class VideoController extends Controller
         $project = VideoProject::findOrFail($id);
 
         if ($project->isProcessing()) {
-            app(RunwayVideoService::class)->syncProject($project);
-            $project->refresh();
+            $isEarlyStep = (int) ($project->current_step ?? 0) <= 1;
+            $hasScenes = is_array($project->scenes_json ?? null) && count($project->scenes_json) > 0;
+            $isStalled = $isEarlyStep
+                && ! $hasScenes
+                && $project->created_at
+                && now()->diffInSeconds($project->created_at) > 240;
+
+            if ($isStalled) {
+                $project->markFailed('Le pipeline ne repond pas. Verifiez la configuration du webhook n8n.');
+                $project->refresh();
+            }
         }
 
         $scenes = $project->scenes_json ?? [];
@@ -125,11 +168,6 @@ class VideoController extends Controller
     public function show(int $id)
     {
         $project = VideoProject::findOrFail($id);
-
-        if ($project->isProcessing()) {
-            app(RunwayVideoService::class)->syncProject($project);
-            $project->refresh();
-        }
 
         if ($project->isProcessing()) {
             return redirect()->route('video.index')
@@ -214,6 +252,66 @@ class VideoController extends Controller
         ])->deleteFileAfterSend();
     }
 
+    public function sceneImage(int $id, int $sceneNumber)
+    {
+        $project = VideoProject::select(['id', 'status', 'scenes_json'])->findOrFail($id);
+        abort_unless($project->isDone(), 404, 'Projet non disponible.');
+
+        $scenes = $project->scenes_json ?? [];
+        $scene  = collect($scenes)->firstWhere('scene_number', $sceneNumber);
+
+        if (!$scene) {
+            abort(404, 'Scene introuvable.');
+        }
+
+        $pollinationsVideo = app(\App\Services\PollinationsVideoService::class);
+
+        $prompt = trim((string) ($scene['image_prompt'] ?? ''));
+        if ($prompt === '') {
+            $prompt = $pollinationsVideo->extractPrompt($scene);
+        }
+        if ($prompt === '') {
+            $prompt = 'colorful animated scene';
+        }
+
+        $seed = $project->id * 100 + $sceneNumber;
+        $realUrl = $pollinationsVideo->buildRealImageUrl($prompt, $seed);
+
+        return redirect()->away($realUrl);
+    }
+
+    public function clip(int $id, int $sceneNumber)
+    {
+        $project = VideoProject::select(['id', 'status', 'scenes_json'])->findOrFail($id);
+        abort_unless($project->isDone(), 404, 'Projet non disponible.');
+
+        $scenes = $project->scenes_json ?? [];
+        $scene  = collect($scenes)->firstWhere('scene_number', $sceneNumber);
+
+        if (!$scene) {
+            abort(404, 'Scene introuvable.');
+        }
+
+        $pollinationsVideo = app(\App\Services\PollinationsVideoService::class);
+        if (!$pollinationsVideo->videoEnabled()) {
+            abort(503, 'Service video indisponible.');
+        }
+
+        $prompt = $pollinationsVideo->extractPrompt($scene);
+        if ($prompt === '') {
+            abort(404, 'Aucune description pour cette scene.');
+        }
+
+        $sceneSeed = $project->id * 1000 + $sceneNumber;
+        $realUrl = $pollinationsVideo->buildRealVideoUrl($prompt, $sceneSeed);
+
+        if ($realUrl === null) {
+            abort(502, 'Impossible de construire l\'URL video.');
+        }
+
+        return redirect()->away($realUrl);
+    }
+
     public function tts(int $id, int $sceneNumber)
     {
         $project = VideoProject::select(['id', 'status', 'scenes_json'])->findOrFail($id);
@@ -226,12 +324,15 @@ class VideoController extends Controller
             abort(404, 'Scene introuvable.');
         }
 
-        $voiceMap = [
-            'narratrice'    => 'EXAVITQu4vr4xnSDxMaL',
-            'narrateur'     => 'ErXwobaYiN019PkySvjV',
-            'enfant_fille'  => 'jBpfuIE2acCO8z3wKNLl',
-            'enfant_garcon' => 'yoZ06aMxZJJ28mfd3POQ',
-        ];
+        $voiceMap = (array) config('services.elevenlabs.voices', []);
+        if (empty($voiceMap)) {
+            $voiceMap = [
+                'narratrice'    => 'EXAVITQu4vr4xnSDxMaL',
+                'narrateur'     => 'ErXwobaYiN019PkySvjV',
+                'enfant_fille'  => 'jBpfuIE2acCO8z3wKNLl',
+                'enfant_garcon' => 'yoZ06aMxZJJ28mfd3POQ',
+            ];
+        }
 
         $allowedVoices = array_keys($voiceMap);
         $voiceType = in_array($scene['voice'] ?? '', $allowedVoices) ? $scene['voice'] : 'narratrice';
@@ -253,6 +354,8 @@ class VideoController extends Controller
         }
 
         try {
+            $voiceSettings = (array) config('services.elevenlabs.settings', []);
+
             $response = Http::withHeaders([
                 'xi-api-key'   => $apiKey,
                 'Content-Type' => 'application/json',
@@ -262,11 +365,12 @@ class VideoController extends Controller
             ->retry(2, 300)
             ->post("https://api.elevenlabs.io/v1/text-to-speech/{$voiceId}", [
                 'text'     => $scene['narration'],
-                'model_id' => 'eleven_multilingual_v2',
+                'model_id' => (string) config('services.elevenlabs.model', 'eleven_multilingual_v2'),
                 'voice_settings' => [
-                    'stability'        => 0.5,
-                    'similarity_boost' => 0.75,
-                    'style'            => 0.3,
+                    'stability'         => (float) ($voiceSettings['stability'] ?? 0.38),
+                    'similarity_boost'  => (float) ($voiceSettings['similarity_boost'] ?? 0.82),
+                    'style'             => (float) ($voiceSettings['style'] ?? 0.45),
+                    'use_speaker_boost' => (bool) ($voiceSettings['use_speaker_boost'] ?? true),
                 ],
             ]);
 

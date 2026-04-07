@@ -10,6 +10,10 @@ class RunwayVideoService
 {
     public function enabled(): bool
     {
+        if (! (bool) config('services.runway.enabled', true)) {
+            return false;
+        }
+
         return !empty((string) config('services.runway.api_key', ''));
     }
 
@@ -29,8 +33,14 @@ class RunwayVideoService
             $promptText = trim((string) ($scene['narration'] ?? ''));
         }
 
-        $duration = (int) ($scene['duration_seconds'] ?? (int) config('services.runway.duration', 5));
-        $duration = max(2, min(10, $duration));
+        $forcedDuration = (int) config('services.runway.force_duration', 0);
+        $duration = $forcedDuration > 0
+            ? $forcedDuration
+            : (int) ($scene['duration_seconds'] ?? (int) config('services.runway.duration', 5));
+
+        $minDuration = max(1, (int) config('services.runway.min_duration', 2));
+        $maxDuration = max($minDuration, (int) config('services.runway.max_duration', 10));
+        $duration = max($minDuration, min($maxDuration, $duration));
 
         $payload = [
             'model'       => (string) config('services.runway.model', 'gen4_turbo'),
@@ -130,11 +140,24 @@ class RunwayVideoService
         }
 
         if ($hasFailure) {
+            foreach ($scenes as &$scene) {
+                unset($scene['runway_task_id'], $scene['video_status'], $scene['video_error']);
+            }
+            unset($scene);
+
             $project->update([
-                'status'        => 'error',
-                'error_message' => $failureMessage ?: 'La generation des scenes video a echoue.',
+                'status'        => 'done',
+                'current_step'  => 5,
+                'video_url'     => $project->video_url ?: 'slideshow',
+                'error_message' => null,
                 'scenes_json'   => $scenes,
             ]);
+
+            Log::warning('Runway sync failure fallback to slideshow', [
+                'project_id' => $project->id,
+                'reason'     => $failureMessage ?: 'Generation video impossible.',
+            ]);
+
             return;
         }
 

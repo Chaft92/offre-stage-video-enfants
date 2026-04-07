@@ -419,6 +419,11 @@
         var preloadedImages = {};
         var allImagesReady = false;
 
+        function getFallbackImageUrl(scene, idx) {
+            if (scene && scene.fallback_image_url) return scene.fallback_image_url;
+            return 'https://picsum.photos/seed/akv-' + PROJECT_ID + '-' + (idx + 1) + '/1280/720';
+        }
+
         function preloadAllImages() {
             var total = SCENES.length;
             var loaded = 0;
@@ -451,6 +456,24 @@
                     loadNext();
                 };
                 img.onerror = function() {
+                    var fallback = getFallbackImageUrl(scene, idx);
+                    if (fallback && img.src !== fallback) {
+                        img.onerror = function() {
+                            loaded++;
+                            updatePreloadUI(loaded, total);
+                            loadNext();
+                        };
+                        img.onload = function() {
+                            preloadedImages[idx] = img;
+                            loaded++;
+                            updatePreloadUI(loaded, total);
+                            applyToDOM(idx, img.src);
+                            loadNext();
+                        };
+                        img.src = fallback;
+                        return;
+                    }
+
                     loaded++;
                     updatePreloadUI(loaded, total);
                     loadNext();
@@ -493,6 +516,35 @@
             return KB_EFFECTS[index % KB_EFFECTS.length];
         }
 
+        function showImageForScene(screen, index, scene, overlay) {
+            var cached = preloadedImages[index];
+            if (cached) {
+                var clone = cached.cloneNode();
+                clone.className = 'hidden-media';
+                screen.insertBefore(clone, overlay);
+                clone.offsetHeight;
+                clone.classList.remove('hidden-media');
+                clone.classList.add('active-media');
+                clone.classList.add(getKBEffect(index));
+            } else {
+                var image = document.createElement('img');
+                image.className = 'hidden-media';
+                image.alt = 'Scene ' + (scene.scene_number || (index + 1));
+                image.onerror = function() {
+                    var fallbackSrc = getFallbackImageUrl(scene, index);
+                    if (image.src !== fallbackSrc) {
+                        image.src = fallbackSrc;
+                    }
+                };
+                image.src = scene.image_url || getFallbackImageUrl(scene, index);
+                screen.insertBefore(image, overlay);
+                image.offsetHeight;
+                image.classList.remove('hidden-media');
+                image.classList.add('active-media');
+                image.classList.add(getKBEffect(index));
+            }
+        }
+
         function showScene(index) {
             if (index < 0 || index >= SCENES.length) return;
 
@@ -526,22 +578,27 @@
                 video.loop = true;
                 video.setAttribute('playsinline', 'playsinline');
                 video.setAttribute('webkit-playsinline', 'webkit-playsinline');
+
+                var videoFailed = false;
+                function fallbackToImage() {
+                    if (videoFailed) return;
+                    videoFailed = true;
+                    try { video.pause(); } catch(e) {}
+                    video.remove();
+                    showImageForScene(screen, index, scene, overlay);
+                }
+
+                video.onerror = fallbackToImage;
+                var videoLoadTimeout = setTimeout(fallbackToImage, 15000);
+                video.onloadeddata = function() { clearTimeout(videoLoadTimeout); };
+
                 screen.insertBefore(video, overlay);
                 video.offsetHeight;
                 video.classList.remove('hidden-media');
                 video.classList.add('active-media');
-                video.play().catch(function() {});
+                video.play().catch(function() { fallbackToImage(); });
             } else {
-                var cached = preloadedImages[index];
-                if (cached) {
-                    var clone = cached.cloneNode();
-                    clone.className = 'hidden-media';
-                    screen.insertBefore(clone, overlay);
-                    clone.offsetHeight;
-                    clone.classList.remove('hidden-media');
-                    clone.classList.add('active-media');
-                    clone.classList.add(getKBEffect(index));
-                }
+                showImageForScene(screen, index, scene, overlay);
             }
 
             var subtitleText = document.getElementById('subtitle-text');
@@ -660,19 +717,33 @@
             showScene(index);
 
             var scene = SCENES[index];
-            var duration = (scene.duration_seconds || 10) * 1000;
+            var minDuration = Math.max(8, (scene.duration_seconds || 15)) * 1000;
+            var audioFinished = false;
+            var minTimeReached = false;
+
+            function tryAdvance() {
+                if (audioFinished && minTimeReached && isPlaying && currentScene === index) {
+                    playScene(index + 1);
+                }
+            }
 
             playSceneAudio(index, function() {
                 if (!isPlaying) return;
-                sceneTimer = setTimeout(function() { if (isPlaying) playScene(index + 1); }, 500);
+                audioFinished = true;
+                tryAdvance();
             });
+
+            sceneTimer = setTimeout(function() {
+                minTimeReached = true;
+                tryAdvance();
+            }, minDuration);
 
             fallbackTimer = setTimeout(function() {
                 if (isPlaying && currentScene === index) {
                     stopAllAudio();
                     playScene(index + 1);
                 }
-            }, duration + 5000);
+            }, minDuration + 20000);
         }
 
         window.togglePlay = function() {

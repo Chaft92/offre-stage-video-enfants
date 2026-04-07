@@ -19,6 +19,14 @@ Route::get('/video/{id}', [VideoController::class, 'show'])->name('video.show');
 
 Route::get('/video/{id}/download', [VideoController::class, 'download'])->name('video.download');
 
+Route::get('/video/{id}/scene-image/{sceneNumber}', [VideoController::class, 'sceneImage'])
+    ->name('video.sceneImage')
+    ->middleware('throttle:120,1');
+
+Route::get('/video/{id}/clip/{sceneNumber}', [VideoController::class, 'clip'])
+    ->name('video.clip')
+    ->middleware('throttle:60,1');
+
 Route::get('/video/{id}/tts/{sceneNumber}', [VideoController::class, 'tts'])
     ->name('video.tts')
     ->middleware('throttle:120,1');

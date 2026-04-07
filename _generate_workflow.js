@@ -18,17 +18,17 @@ var stylePrefix = styleMap[style] || styleMap.cartoon;
 
 var groqBody = {
   model: 'llama-3.3-70b-versatile',
-  max_tokens: 4096,
-  temperature: 0.7,
+  max_tokens: 8192,
+  temperature: 0.65,
   response_format: { type: 'json_object' },
   messages: [
     {
       role: 'system',
-      content: 'Tu es un scenariste professionnel de videos educatives pour enfants (6-10 ans). Tu reponds UNIQUEMENT en JSON valide. Pas de markdown.'
+      content: 'Tu es un directeur d ecriture et storyboarder senior specialise en videos educatives premium pour enfants (6-10 ans). Tu dois produire un resultat cinematographique, pedagogique et coherent. Tu reponds UNIQUEMENT en JSON valide, sans markdown.'
     },
     {
       role: 'user',
-      content: 'Cree un script video educatif pour enfants sur : "' + theme + '".\\n\\nStructure obligatoire :\\n- Introduction (2-3 scenes) : presenter le theme et le personnage principal\\n- Developpement (5-8 scenes) : raconter l histoire avec des moments educatifs\\n- Conclusion (2-3 scenes) : resolution et morale\\n\\nRegles :\\n- Entre 10 et 15 scenes au total\\n- Chaque scene : 8-15 secondes (total 120-180s)\\n- Descriptions visuelles en ANGLAIS (pour generateur image), commencant par "' + stylePrefix + '"\\n- Narrations en FRANCAIS, 20-35 mots par scene\\n- Chaque scene a un champ "voice" parmi : "narratrice" (voix feminine douce), "narrateur" (voix masculine chaleureuse), "enfant_fille" (voix jeune fille), "enfant_garcon" (voix jeune garcon)\\n- Choisis la voix adaptee au contexte de chaque scene\\n\\nJSON exact :\\n{\\n  "story": "resume 50-80 mots en francais",\\n  "moral": "la morale",\\n  "scenes": [\\n    {\\n      "scene_number": 1,\\n      "part": "introduction",\\n      "visual_description": "' + stylePrefix + ' of ...",\\n      "narration": "texte francais",\\n      "duration_seconds": 10,\\n      "voice": "narratrice"\\n    }\\n  ]\\n}'
+      content: 'Cree un FILM EDUCATIF PREMIUM sur : "' + theme + '".\\n\\nOBJECTIF : video finale de niveau recruteur, riche, detaillee, emotionnelle et pedagogique.\\n\\nCONTRAINTES OBLIGATOIRES :\\n- EXACTEMENT 8 scenes, numerotees 1 a 8, sans trou.\\n- Structure fixe : scenes 1-2 = introduction, 3-6 = development, 7-8 = conclusion.\\n- Personnages et decor coherents d une scene a l autre (continuite visuelle).\\n- Chaque scene doit apporter une progression narrative concrete.\\n- Ton bienveillant, non choquant, adapte enfants 6-10 ans.\\n\\nQUALITE NARRATIVE :\\n- story : 180 a 260 mots en francais.\\n- moral : 1 phrase claire et memorisable.\\n- narration par scene : 55 a 95 mots en francais naturel, varie, vivant.\\n- duration_seconds par scene : entier entre 20 et 35.\\n\\nQUALITE VISUELLE :\\n- visual_description : en ANGLAIS, 90 a 150 mots, tres detaillee, cinematographique, avec composition, camera, lumiere, ambiance, emotion, actions precises. Commencer par "' + stylePrefix + '".\\n- image_prompt : en ANGLAIS, 30 a 60 mots, concis, optimise generation image (resume visuel de la scene).\\n\\nVOIX :\\n- voice doit etre une valeur parmi : narratrice, narrateur, enfant_fille, enfant_garcon.\\n- Varier les voix selon le contexte; ne pas mettre la meme voix partout.\\n\\nFORMAT JSON STRICT :\\n{\\n  "story": "...",\\n  "moral": "...",\\n  "scenes": [\\n    {\\n      "scene_number": 1,\\n      "part": "introduction",\\n      "visual_description": "...",\\n      "image_prompt": "...",\\n      "narration": "...",\\n      "duration_seconds": 24,\\n      "voice": "narrateur"\\n    }\\n  ]\\n}\\n\\nAucun texte hors JSON.'
     }
   ]
 };
@@ -40,6 +40,7 @@ const parseStoryCode = `
 var project_id = $('Build Groq Request').first().json.project_id;
 var theme = $('Build Groq Request').first().json.theme;
 var input = $input.first().json;
+var TARGET_SCENES = 8;
 
 function findBufferBytes(obj, depth) {
   if (!obj || typeof obj !== 'object' || depth > 6) return null;
@@ -94,20 +95,90 @@ if (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 
   throw new Error('No scenes array. Keys: ' + Object.keys(parsed).join(', '));
 }
 
+function choosePart(index) {
+  if (index < 2) return 'introduction';
+  if (index >= TARGET_SCENES - 2) return 'conclusion';
+  return 'development';
+}
+
+function chooseVoice(index, part) {
+  var pattern = ['narrateur', 'narratrice', 'enfant_fille', 'narrateur', 'enfant_garcon', 'narratrice', 'enfant_fille', 'narrateur'];
+  if (part === 'conclusion' && index >= TARGET_SCENES - 2) {
+    return index === TARGET_SCENES - 2 ? 'narratrice' : 'narrateur';
+  }
+  return pattern[index % pattern.length];
+}
+
+function sanitizeText(v) {
+  return String(v || '').replace(/\\s+/g, ' ').trim();
+}
+
+function enrichNarration(narration) {
+  var txt = sanitizeText(narration);
+  if (txt.length < 150) {
+    txt += ' Le narrateur prend le temps d expliquer les emotions, les choix des personnages et ce que les enfants peuvent retenir dans la vie quotidienne.';
+  }
+  return txt.slice(0, 950);
+}
+
+function enrichVisual(visual, stylePrefix) {
+  var txt = sanitizeText(visual);
+  if (txt.length < 120) {
+    txt = stylePrefix + ' cinematic scene with expressive characters, layered environment, controlled depth of field, detailed lighting, emotional clarity, and clear storytelling action.';
+  }
+  return txt.slice(0, 1400);
+}
+
+function buildImagePrompt(scene, stylePrefix) {
+  var prompt = sanitizeText(scene.image_prompt || '');
+  if (!prompt) {
+    prompt = sanitizeText(scene.visual_description || '');
+  }
+  if (!prompt) {
+    prompt = stylePrefix + ' cinematic animated still, coherent character design, detailed environment, emotional action';
+  }
+  return prompt.slice(0, 420);
+}
+
 var scenes = [];
-for (var s = 0; s < parsed.scenes.length; s++) {
+for (var s = 0; s < Math.min(parsed.scenes.length, TARGET_SCENES); s++) {
   var sc = parsed.scenes[s];
+  var part = ['introduction', 'development', 'conclusion'].includes(sc.part) ? sc.part : choosePart(s);
+  var voice = ['narratrice', 'narrateur', 'enfant_fille', 'enfant_garcon'].includes(sc.voice) ? sc.voice : chooseVoice(s, part);
+
   scenes.push({
-    scene_number: sc.scene_number || (s + 1),
-    part: sc.part || 'development',
-    visual_description: sc.visual_description || 'A colorful cartoon scene',
-    narration: sc.narration || '',
-    duration_seconds: Math.max(5, Math.min(20, sc.duration_seconds || 10)),
-    voice: sc.voice || 'narratrice'
+    scene_number: s + 1,
+    part: part,
+    visual_description: enrichVisual(sc.visual_description, 'A colorful cinematic animated frame'),
+    image_prompt: buildImagePrompt(sc, 'A colorful cinematic animated frame'),
+    narration: enrichNarration(sc.narration),
+    duration_seconds: Math.max(20, Math.min(35, Number(sc.duration_seconds || 24))),
+    voice: voice
   });
 }
 
-return [{ json: { project_id: project_id, theme: theme, story: parsed.story || '', moral: parsed.moral || '', scenes: scenes } }];
+while (scenes.length < TARGET_SCENES) {
+  var i = scenes.length;
+  var p = choosePart(i);
+  scenes.push({
+    scene_number: i + 1,
+    part: p,
+    visual_description: 'A colorful cinematic animated frame with consistent character design, emotional expressions, dynamic composition, rich environment details, dramatic yet soft lighting, and pedagogical storytelling focus.',
+    image_prompt: 'cinematic animated still, expressive character close-up, coherent environment, emotional storytelling, high detail, volumetric light',
+    narration: 'La scene continue l histoire avec des actions claires, des emotions lisibles et une progression logique. Le ton reste pedagogique, rassurant et inspire les enfants a comprendre, communiquer et agir avec bienveillance.',
+    duration_seconds: 24,
+    voice: chooseVoice(i, p)
+  });
+}
+
+var story = sanitizeText(parsed.story || '');
+if (story.length < 280) {
+  story += ' Cette histoire suit un parcours progressif: observation du probleme, comprehension des emotions, recherche d aide, experimentation, cooperation et resolution positive. Chaque scene illustre une etape concrete avec des exemples que les enfants peuvent reutiliser dans leur quotidien.';
+}
+
+var moral = sanitizeText(parsed.moral || 'Demander de l aide et parler de ses emotions permet de trouver des solutions et de grandir avec les autres.');
+
+return [{ json: { project_id: project_id, theme: theme, story: story.slice(0, 2200), moral: moral.slice(0, 300), scenes: scenes } }];
 `.trim();
 
 const prepareCallbackCode = `
@@ -120,6 +191,7 @@ for (var s = 0; s < storyData.scenes.length; s++) {
     scene_number: sc.scene_number,
     part: sc.part,
     visual_description: sc.visual_description,
+    image_prompt: sc.image_prompt,
     narration: sc.narration,
     duration_seconds: sc.duration_seconds,
     voice: sc.voice,
@@ -171,7 +243,7 @@ function makeNotifyNode(id, name, stepNum, position, projectIdExpr) {
 }
 
 const workflow = {
-  name: "AI Kids Video Generator v13",
+  name: "AI Kids Video Generator v14",
   nodes: [
     {
       parameters: {
@@ -278,4 +350,4 @@ const workflow = {
 };
 
 require('fs').writeFileSync('n8n_workflow.json', JSON.stringify(workflow, null, 2), 'utf-8');
-console.log('Workflow v13 generated — ' + workflow.nodes.length + ' nodes, onReceived mode');
+console.log('Workflow v14 generated — ' + workflow.nodes.length + ' nodes, onReceived mode');
