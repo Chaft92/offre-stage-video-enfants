@@ -252,11 +252,8 @@ class N8NCallbackController extends Controller
     {
         $validVoices = ['narratrice', 'narrateur', 'enfant_fille', 'enfant_garcon'];
 
-        if ($groqVoice !== '' && in_array($groqVoice, $validVoices, true)) {
-            return $groqVoice;
-        }
-
-        return 'narrateur';
+        // Force narratrice for consistent storytelling voice
+        return 'narratrice';
     }
 
     private function buildImagePrompt(array $scene, int $index, string $characters = '', string $setting = ''): string

@@ -184,6 +184,8 @@ class VideoController extends Controller
 
     public function download(int $id)
     {
+        set_time_limit(600); // Allow up to 10 min for downloading all media
+
         $project = VideoProject::findOrFail($id);
         abort_unless($project->isDone(), 404, 'Projet non disponible.');
 
@@ -244,6 +246,54 @@ class VideoController extends Controller
                 $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
             }
 
+            // Download images and videos for each scene
+            $pollinationsVideo = app(\App\Services\PollinationsVideoService::class);
+            foreach ($scenes as $s) {
+                $sceneNum = (int) ($s['scene_number'] ?? 0);
+                $n = str_pad((string) $sceneNum, 2, '0', STR_PAD_LEFT);
+                $seed = $id * 100 + $sceneNum;
+
+                // Download image
+                $imagePrompt = trim((string) ($s['image_prompt'] ?? ''));
+                if ($imagePrompt === '') {
+                    $imagePrompt = $pollinationsVideo->extractPrompt($s);
+                }
+                if ($imagePrompt !== '') {
+                    $imageUrl = $pollinationsVideo->buildRealImageUrl($imagePrompt, $seed);
+                    try {
+                        $imgResponse = Http::timeout(30)->get($imageUrl);
+                        if ($imgResponse->successful()) {
+                            $ext = str_contains($imgResponse->header('Content-Type') ?? '', 'png') ? 'png' : 'jpg';
+                            $zip->addFromString("images/scene_{$n}.{$ext}", $imgResponse->body());
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning("ZIP: failed to download image for scene {$sceneNum}", ['error' => $e->getMessage()]);
+                    }
+                }
+
+                // Download video
+                if (!empty($s['video_url']) && $pollinationsVideo->videoEnabled()) {
+                    $videoPrompt = trim((string) ($s['image_prompt'] ?? ''));
+                    if ($videoPrompt === '') {
+                        $videoPrompt = $pollinationsVideo->extractPrompt($s);
+                    }
+                    if ($videoPrompt !== '') {
+                        $videoSeed = $id * 1000 + $sceneNum;
+                        $realVideoUrl = $pollinationsVideo->buildRealVideoUrl($videoPrompt, $videoSeed);
+                        if ($realVideoUrl) {
+                            try {
+                                $vidResponse = Http::timeout(120)->get($realVideoUrl);
+                                if ($vidResponse->successful()) {
+                                    $zip->addFromString("videos/scene_{$n}.mp4", $vidResponse->body());
+                                }
+                            } catch (\Throwable $e) {
+                                Log::warning("ZIP: failed to download video for scene {$sceneNum}", ['error' => $e->getMessage()]);
+                            }
+                        }
+                    }
+                }
+            }
+
             $readme = implode("\n", [
                 'PACK COMPLET - AI Kids Video Generator',
                 'Fait par Julien YILDIZ',
@@ -256,6 +306,8 @@ class VideoController extends Controller
                 '  histoire_complete.txt             : Histoire narrative generee par IA',
                 "  script_{$sceneCount}_scenes.txt   : Script complet (visuel + narration)",
                 '  scenes/scene_XX_narration.txt     : Narration individuelle par scene',
+                '  images/scene_XX.jpg               : Images generees par IA',
+                '  videos/scene_XX.mp4               : Videos generees par IA',
                 $hasVideo ? '  video_complete.url                : Lien vers la video finale' : '',
             ]);
             $zip->addFromString('README.txt', $readme);
@@ -357,11 +409,11 @@ class VideoController extends Controller
             'enfant_garcon' => 'echo',
         ];
 
-        $voiceType = in_array($scene['voice'] ?? '', array_keys($voiceMap)) ? $scene['voice'] : 'narrateur';
-        $voice = $voiceMap[$voiceType];
+        // Force narratrice for consistent voice across all scenes
+        $voice = $voiceMap['narratrice'];
 
         $cacheDir  = storage_path('app/tts');
-        $cacheFile = "{$cacheDir}/tts_{$id}_{$sceneNumber}_{$voiceType}.mp3";
+        $cacheFile = "{$cacheDir}/tts_{$id}_{$sceneNumber}_narratrice.mp3";
 
         if (file_exists($cacheFile)) {
             return response()->file($cacheFile, [

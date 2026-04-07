@@ -46,7 +46,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: opacity 0.8s ease-in-out;
+            transition: opacity 0.5s ease-in-out;
         }
         .cinema-screen .hidden-media { opacity: 0; }
         .cinema-screen .active-media { opacity: 1; }
@@ -89,10 +89,10 @@
 
         .subtitle-bar {
             position: absolute;
-            bottom: 60px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            max-width: 70%;
+            max-width: 90%;
             text-align: center;
             pointer-events: none;
             z-index: 10;
@@ -101,7 +101,7 @@
         .subtitle-bar.hidden-sub { opacity: 0; }
         .subtitle-text {
             display: inline-block;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.42);
             color: #fff;
             font-size: 0.8rem;
             font-weight: 400;
@@ -556,6 +556,7 @@
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
+            // Crossfade: fade out old media smoothly
             screen.querySelectorAll('.active-media').forEach(function(el) {
                 el.classList.remove('active-media');
                 KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
@@ -563,11 +564,12 @@
                 if (el.tagName === 'VIDEO') {
                     try { el.pause(); } catch (e) {}
                 }
-                setTimeout(function() { el.remove(); }, 1000);
+                setTimeout(function() { el.remove(); }, 600);
             });
 
             var sceneVideoUrl = (scene.video_url || '').trim();
             if (sceneVideoUrl !== '') {
+                // Show image as brief poster (~1s) then crossfade to video
                 showImageForScene(screen, index, scene, overlay);
 
                 var video = document.createElement('video');
@@ -594,15 +596,19 @@
 
                 video.onloadeddata = function() {
                     clearTimeout(videoLoadTimeout);
-                    screen.querySelectorAll('img.active-media').forEach(function(img) {
-                        img.classList.remove('active-media');
-                        KB_EFFECTS.forEach(function(k) { img.classList.remove(k); });
-                        img.classList.add('hidden-media');
-                        setTimeout(function() { img.remove(); }, 1000);
-                    });
-                    video.classList.remove('hidden-media');
-                    video.classList.add('active-media');
-                    video.play().catch(function() { fallbackToImage(); });
+                    // Wait ~1s so image is visible briefly, then crossfade to video
+                    setTimeout(function() {
+                        if (videoFailed) return;
+                        screen.querySelectorAll('img.active-media').forEach(function(img) {
+                            img.classList.remove('active-media');
+                            KB_EFFECTS.forEach(function(k) { img.classList.remove(k); });
+                            img.classList.add('hidden-media');
+                            setTimeout(function() { img.remove(); }, 600);
+                        });
+                        video.classList.remove('hidden-media');
+                        video.classList.add('active-media');
+                        video.play().catch(function() { fallbackToImage(); });
+                    }, 1000);
                 };
 
                 screen.insertBefore(video, overlay);
@@ -725,8 +731,18 @@
 
             showScene(index);
 
+            // Preload next scene's image for seamless transition
+            if (index + 1 < SCENES.length) {
+                var nextScene = SCENES[index + 1];
+                if (nextScene && nextScene.image_url && !preloadedImages[index + 1]) {
+                    var preImg = new Image();
+                    preImg.src = nextScene.image_url;
+                    preImg.onload = function() { preloadedImages[index + 1] = preImg; };
+                }
+            }
+
             var scene = SCENES[index];
-            var minDuration = Math.max(8, (scene.duration_seconds || 15)) * 1000;
+            var minDuration = Math.max(6, (scene.duration_seconds || 15)) * 1000;
             var audioFinished = false;
             var minTimeReached = false;
 
@@ -752,7 +768,7 @@
                     stopAllAudio();
                     playScene(index + 1);
                 }
-            }, minDuration + 20000);
+            }, minDuration + 15000);
         }
 
         window.togglePlay = function() {
