@@ -410,79 +410,41 @@
 
         var currentScene = -1;
         var isPlaying = false;
-        var audioElements = {};
-        var ttsFailedForScene = {};
         var sceneTimer = null;
         var fallbackTimer = null;
-        var currentUtterance = null;
         var subtitlesEnabled = true;
+
         var preloadedImages = {};
-        var allImagesReady = false;
+        var preloadedAudio = {};
+        var allMediaReady = false;
 
-        function getFallbackImageUrl(scene, idx) {
-            if (scene && scene.fallback_image_url) return scene.fallback_image_url;
-            return 'https://picsum.photos/seed/akv-' + PROJECT_ID + '-' + (idx + 1) + '/1280/720';
-        }
+        var totalItems = SCENES.length * 2;
+        var loadedItems = 0;
+        var audioRetryMax = 10;
+        var audioRetryDelay = 2500;
 
-        function preloadAllImages() {
-            var total = SCENES.length;
-            var loaded = 0;
+        /* ===== PRELOAD UI ===== */
 
-            if (total === 0) {
-                updatePreloadUI(1, 1);
-                return;
-            }
+        function updatePreloadUI() {
+            var pct = totalItems > 0 ? Math.round((loadedItems / totalItems) * 100) : 100;
+            var fill = document.getElementById('preload-fill');
+            var count = document.getElementById('preload-count');
+            var label = document.getElementById('preload-label');
+            if (fill) fill.style.width = pct + '%';
+            if (count) count.textContent = loadedItems + ' / ' + totalItems;
 
-            var concurrency = 3;
-            var queue = [];
-            for (var i = 0; i < total; i++) queue.push(i);
-
-            function loadNext() {
-                if (queue.length === 0) return;
-                var idx = queue.shift();
-                var scene = SCENES[idx];
-                if (!scene || !scene.image_url) {
-                    loaded++;
-                    updatePreloadUI(loaded, total);
-                    loadNext();
-                    return;
-                }
-                var img = new Image();
-                img.onload = function() {
-                    preloadedImages[idx] = img;
-                    loaded++;
-                    updatePreloadUI(loaded, total);
-                    applyToDOM(idx, img.src);
-                    loadNext();
-                };
-                img.onerror = function() {
-                    var fallback = getFallbackImageUrl(scene, idx);
-                    if (fallback && img.src !== fallback) {
-                        img.onerror = function() {
-                            loaded++;
-                            updatePreloadUI(loaded, total);
-                            loadNext();
-                        };
-                        img.onload = function() {
-                            preloadedImages[idx] = img;
-                            loaded++;
-                            updatePreloadUI(loaded, total);
-                            applyToDOM(idx, img.src);
-                            loadNext();
-                        };
-                        img.src = fallback;
-                        return;
-                    }
-
-                    loaded++;
-                    updatePreloadUI(loaded, total);
-                    loadNext();
-                };
-                img.src = scene.image_url;
-            }
-
-            for (var c = 0; c < Math.min(concurrency, total); c++) {
-                loadNext();
+            if (loadedItems >= totalItems && !allMediaReady) {
+                allMediaReady = true;
+                if (label) label.textContent = 'Film pret !';
+                setTimeout(function() {
+                    var overlay = document.getElementById('preload-overlay');
+                    if (overlay) overlay.classList.add('done');
+                    autoStartFilm();
+                }, 500);
+            } else if (label && !allMediaReady) {
+                var imgDone = Object.keys(preloadedImages).length;
+                var audioDone = Object.keys(preloadedAudio).length;
+                label.textContent = 'Preparation du film... Images ' + imgDone + '/' + SCENES.length + ' \u00b7 Audio ' + audioDone + '/' + SCENES.length;
             }
         }
 
@@ -493,56 +455,133 @@
             if (sceneImg) { sceneImg.src = src; sceneImg.style.opacity = '1'; }
         }
 
-        function updatePreloadUI(loaded, total) {
-            var pct = Math.round((loaded / total) * 100);
-            var fill = document.getElementById('preload-fill');
-            var count = document.getElementById('preload-count');
-            var label = document.getElementById('preload-label');
-            if (fill) fill.style.width = pct + '%';
-            if (count) count.textContent = loaded + ' / ' + total;
-            if (loaded >= total) {
-                allImagesReady = true;
-                if (label) label.textContent = 'Pret !';
-                setTimeout(function() {
-                    var overlay = document.getElementById('preload-overlay');
-                    if (overlay) overlay.classList.add('done');
-                }, 400);
-            }
+        function getFallbackImageUrl(scene, idx) {
+            if (scene && scene.fallback_image_url) return scene.fallback_image_url;
+            return 'https://picsum.photos/seed/akv-' + PROJECT_ID + '-' + (idx + 1) + '/1280/720';
         }
 
-        preloadAllImages();
+        /* ===== IMAGE PRELOAD (concurrent, 3 at a time) ===== */
+
+        (function preloadImages() {
+            var queue = [];
+            for (var i = 0; i < SCENES.length; i++) queue.push(i);
+            var running = 0;
+            var concurrency = 3;
+
+            function next() {
+                if (queue.length === 0) return;
+                var idx = queue.shift();
+                running++;
+                var scene = SCENES[idx];
+                if (!scene || !scene.image_url) { finish(idx, false); return; }
+
+                var img = new Image();
+                img.onload = function() { finish(idx, true, img); };
+                img.onerror = function() {
+                    var fb = getFallbackImageUrl(scene, idx);
+                    if (fb && img.src !== fb) {
+                        img.onload = function() { finish(idx, true, img); };
+                        img.onerror = function() { finish(idx, false); };
+                        img.src = fb;
+                        return;
+                    }
+                    finish(idx, false);
+                };
+                img.src = scene.image_url;
+            }
+
+            function finish(idx, ok, img) {
+                if (ok && img) { preloadedImages[idx] = img; applyToDOM(idx, img.src); }
+                loadedItems++;
+                running--;
+                updatePreloadUI();
+                next();
+            }
+
+            for (var c = 0; c < Math.min(concurrency, SCENES.length); c++) next();
+        })();
+
+        /* ===== AUDIO PRELOAD (with retries) ===== */
+
+        (function preloadAllAudio() {
+            for (var i = 0; i < SCENES.length; i++) {
+                preloadOneAudio(i, 0);
+            }
+        })();
+
+        function preloadOneAudio(idx, attempt) {
+            var scene = SCENES[idx];
+            if (!scene || !scene.narration) {
+                loadedItems++;
+                updatePreloadUI();
+                return;
+            }
+
+            var sceneNum = scene.scene_number || (idx + 1);
+            var url = '/video/' + PROJECT_ID + '/tts/' + sceneNum;
+
+            fetch(url)
+                .then(function(resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.blob();
+                })
+                .then(function(blob) {
+                    if (blob.size < 500) throw new Error('Audio too small');
+                    var blobUrl = URL.createObjectURL(blob);
+                    var audio = new Audio(blobUrl);
+                    audio.preload = 'auto';
+                    preloadedAudio[idx] = audio;
+                    loadedItems++;
+                    updatePreloadUI();
+                })
+                .catch(function(err) {
+                    if (attempt < audioRetryMax) {
+                        setTimeout(function() { preloadOneAudio(idx, attempt + 1); }, audioRetryDelay);
+                    } else {
+                        loadedItems++;
+                        updatePreloadUI();
+                    }
+                });
+        }
+
+        /* ===== CINEMA DISPLAY ===== */
 
         function getKBEffect(index) {
             return KB_EFFECTS[index % KB_EFFECTS.length];
         }
 
+        function clearScreen() {
+            var screen = document.getElementById('cinema-screen');
+            var overlay = document.getElementById('cinema-overlay');
+            screen.querySelectorAll('.active-media').forEach(function(el) {
+                el.classList.remove('active-media');
+                KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
+                el.classList.add('hidden-media');
+                if (el.tagName === 'VIDEO') { try { el.pause(); } catch(e) {} }
+                setTimeout(function() { el.remove(); }, 600);
+            });
+        }
+
         function showImageForScene(screen, index, scene, overlay) {
             var cached = preloadedImages[index];
+            var image;
             if (cached) {
-                var clone = cached.cloneNode();
-                clone.className = 'hidden-media';
-                screen.insertBefore(clone, overlay);
-                clone.offsetHeight;
-                clone.classList.remove('hidden-media');
-                clone.classList.add('active-media');
-                clone.classList.add(getKBEffect(index));
+                image = cached.cloneNode();
             } else {
-                var image = document.createElement('img');
-                image.className = 'hidden-media';
+                image = document.createElement('img');
                 image.alt = 'Scene ' + (scene.scene_number || (index + 1));
                 image.onerror = function() {
-                    var fallbackSrc = getFallbackImageUrl(scene, index);
-                    if (image.src !== fallbackSrc) {
-                        image.src = fallbackSrc;
-                    }
+                    var fb = getFallbackImageUrl(scene, index);
+                    if (image.src !== fb) image.src = fb;
                 };
                 image.src = scene.image_url || getFallbackImageUrl(scene, index);
-                screen.insertBefore(image, overlay);
-                image.offsetHeight;
-                image.classList.remove('hidden-media');
-                image.classList.add('active-media');
-                image.classList.add(getKBEffect(index));
             }
+            image.className = 'hidden-media';
+            screen.insertBefore(image, overlay);
+            image.offsetHeight;
+            image.classList.remove('hidden-media');
+            image.classList.add('active-media');
+            image.classList.add(getKBEffect(index));
         }
 
         function showScene(index) {
@@ -556,20 +595,10 @@
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
-            // Crossfade: fade out old media smoothly
-            screen.querySelectorAll('.active-media').forEach(function(el) {
-                el.classList.remove('active-media');
-                KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
-                el.classList.add('hidden-media');
-                if (el.tagName === 'VIDEO') {
-                    try { el.pause(); } catch (e) {}
-                }
-                setTimeout(function() { el.remove(); }, 600);
-            });
+            clearScreen();
 
             var sceneVideoUrl = (scene.video_url || '').trim();
             if (sceneVideoUrl !== '') {
-                // Show image as brief poster (~1s) then crossfade to video
                 showImageForScene(screen, index, scene, overlay);
 
                 var video = document.createElement('video');
@@ -580,7 +609,6 @@
                 video.playsInline = true;
                 video.loop = true;
                 video.setAttribute('playsinline', 'playsinline');
-                video.setAttribute('webkit-playsinline', 'webkit-playsinline');
                 video.style.zIndex = '3';
 
                 var videoFailed = false;
@@ -592,11 +620,10 @@
                 }
 
                 video.onerror = fallbackToImage;
-                var videoLoadTimeout = setTimeout(fallbackToImage, 60000);
+                var loadTimeout = setTimeout(fallbackToImage, 45000);
 
                 video.onloadeddata = function() {
-                    clearTimeout(videoLoadTimeout);
-                    // Wait ~1s so image is visible briefly, then crossfade to video
+                    clearTimeout(loadTimeout);
                     setTimeout(function() {
                         if (videoFailed) return;
                         screen.querySelectorAll('img.active-media').forEach(function(img) {
@@ -608,7 +635,7 @@
                         video.classList.remove('hidden-media');
                         video.classList.add('active-media');
                         video.play().catch(function() { fallbackToImage(); });
-                    }, 1000);
+                    }, 800);
                 };
 
                 screen.insertBefore(video, overlay);
@@ -619,31 +646,19 @@
             var subtitleText = document.getElementById('subtitle-text');
             var subtitleBar = document.getElementById('subtitle-bar');
             subtitleText.textContent = scene.narration || '';
-            if (subtitlesEnabled) {
-                subtitleBar.classList.remove('hidden-sub');
-            }
+            if (subtitlesEnabled) subtitleBar.classList.remove('hidden-sub');
 
             var label = document.getElementById('cinema-scene-label');
             var part = scene.part || 'development';
             label.textContent = 'Scene ' + (scene.scene_number || index + 1);
             label.className = 'scene-badge-part part-' + part;
-
-            var voiceMap = { narratrice: 'Narratrice', narrateur: 'Narrateur', enfant_fille: 'Enfant (fille)', enfant_garcon: 'Enfant (garcon)' };
-            document.getElementById('cinema-voice-badge').textContent = voiceMap[scene.voice] || 'Narratrice';
-
+            document.getElementById('cinema-voice-badge').textContent = 'Narratrice';
             document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
+            document.getElementById('progress-fill').style.width = (((index + 1) / SCENES.length) * 100) + '%';
 
-            var pct = ((index + 1) / SCENES.length) * 100;
-            document.getElementById('progress-fill').style.width = pct + '%';
-
-            document.querySelectorAll('.scene-thumb, [id^="thumb-wrap-"]').forEach(function(t) {
-                t.style.borderColor = 'transparent';
-            });
-            var thumbWrap = document.getElementById('thumb-wrap-' + index);
-            if (thumbWrap) {
-                thumbWrap.style.borderColor = '#a855f7';
-                thumbWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            }
+            document.querySelectorAll('[id^="thumb-wrap-"]').forEach(function(t) { t.style.borderColor = 'transparent'; });
+            var tw = document.getElementById('thumb-wrap-' + index);
+            if (tw) { tw.style.borderColor = '#a855f7'; tw.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
 
             document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
             var card = document.getElementById('scene-card-' + index);
@@ -652,123 +667,75 @@
             currentScene = index;
         }
 
-        function getAudio(index) {
-            if (audioElements[index]) return audioElements[index];
-            var scene = SCENES[index];
-            if (!scene) return null;
-            var sceneNum = scene.scene_number || (index + 1);
-            var audio = new Audio();
-            audio.preload = 'none';
-            audio.dataset.src = '/video/' + PROJECT_ID + '/tts/' + sceneNum;
-            audioElements[index] = audio;
-            return audio;
-        }
+        /* ===== AUDIO PLAYBACK (preloaded only, no browser TTS) ===== */
 
         function playSceneAudio(index, onEnd) {
             var scene = SCENES[index];
             if (!scene || !scene.narration) { onEnd(); return; }
 
-            if (ttsFailedForScene[index]) {
-                playBrowserTTS(index, onEnd);
-                return;
+            var audio = preloadedAudio[index];
+            if (audio) {
+                audio.currentTime = 0;
+                function done() { audio.removeEventListener('ended', done); audio.removeEventListener('error', done); onEnd(); }
+                audio.addEventListener('ended', done);
+                audio.addEventListener('error', done);
+                audio.play().catch(function() { done(); });
+            } else {
+                onEnd();
             }
-
-            var audio = getAudio(index);
-            if (!audio.src || audio.src === window.location.href) {
-                audio.src = audio.dataset.src;
-            }
-
-            function handleEnd() { cleanup(); onEnd(); }
-            function handleError() { cleanup(); ttsFailedForScene[index] = true; playBrowserTTS(index, onEnd); }
-
-            function cleanup() {
-                audio.removeEventListener('ended', handleEnd);
-                audio.removeEventListener('error', handleError);
-            }
-
-            audio.addEventListener('ended', handleEnd);
-            audio.addEventListener('error', handleError);
-
-            audio.play().catch(function() {
-                cleanup();
-                ttsFailedForScene[index] = true;
-                playBrowserTTS(index, onEnd);
-            });
-        }
-
-        function playBrowserTTS(index, onEnd) {
-            if (!('speechSynthesis' in window)) { onEnd(); return; }
-
-            var scene = SCENES[index];
-            if (!scene || !scene.narration) { onEnd(); return; }
-
-            speechSynthesis.cancel();
-            var utterance = new SpeechSynthesisUtterance(scene.narration);
-            utterance.lang = 'fr-FR';
-            utterance.rate = 0.92;
-            utterance.pitch = 1.05;
-
-            var voices = speechSynthesis.getVoices();
-            var frVoice = voices.find(function(v) { return v.lang.startsWith('fr'); });
-            if (frVoice) utterance.voice = frVoice;
-
-            currentUtterance = utterance;
-            utterance.onend = function() { currentUtterance = null; onEnd(); };
-            utterance.onerror = function() { currentUtterance = null; onEnd(); };
-            speechSynthesis.speak(utterance);
         }
 
         function stopAllAudio() {
-            Object.values(audioElements).forEach(function(a) { a.pause(); a.currentTime = 0; });
-            if ('speechSynthesis' in window) speechSynthesis.cancel();
-            currentUtterance = null;
+            Object.keys(preloadedAudio).forEach(function(k) {
+                try { preloadedAudio[k].pause(); preloadedAudio[k].currentTime = 0; } catch(e) {}
+            });
             if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
             if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
         }
+
+        /* ===== SEAMLESS MONTAGE PLAYBACK ===== */
 
         function playScene(index) {
             if (index >= SCENES.length) { stopPlayback(); return; }
 
             showScene(index);
 
-            // Preload next scene's image for seamless transition
-            if (index + 1 < SCENES.length) {
-                var nextScene = SCENES[index + 1];
-                if (nextScene && nextScene.image_url && !preloadedImages[index + 1]) {
-                    var preImg = new Image();
-                    preImg.src = nextScene.image_url;
-                    preImg.onload = function() { preloadedImages[index + 1] = preImg; };
-                }
-            }
-
             var scene = SCENES[index];
-            var minDuration = Math.max(6, (scene.duration_seconds || 15)) * 1000;
-            var audioFinished = false;
-            var minTimeReached = false;
+            var dur = Math.max(4, (scene.duration_seconds || 15)) * 1000;
+            var audioDone = false;
+            var timeDone = false;
 
-            function tryAdvance() {
-                if (audioFinished && minTimeReached && isPlaying && currentScene === index) {
+            function advance() {
+                if (audioDone && timeDone && isPlaying && currentScene === index) {
                     playScene(index + 1);
                 }
             }
 
             playSceneAudio(index, function() {
                 if (!isPlaying) return;
-                audioFinished = true;
-                tryAdvance();
+                audioDone = true;
+                advance();
             });
 
             sceneTimer = setTimeout(function() {
-                minTimeReached = true;
-                tryAdvance();
-            }, minDuration);
+                timeDone = true;
+                advance();
+            }, dur);
 
             fallbackTimer = setTimeout(function() {
                 if (isPlaying && currentScene === index) {
                     stopAllAudio();
                     playScene(index + 1);
                 }
-            }, minDuration + 15000);
+            }, dur + 10000);
+        }
+
+        function autoStartFilm() {
+            if (isPlaying) return;
+            isPlaying = true;
+            document.getElementById('play-icon').innerHTML = '&#9646;&#9646;';
+            document.getElementById('btn-play').classList.add('active');
+            playScene(0);
         }
 
         window.togglePlay = function() {
@@ -778,11 +745,8 @@
                 isPlaying = true;
                 document.getElementById('play-icon').innerHTML = '&#9646;&#9646;';
                 document.getElementById('btn-play').classList.add('active');
-                if (currentScene < 0 || currentScene >= SCENES.length - 1) {
-                    playScene(0);
-                } else {
-                    playScene(currentScene);
-                }
+                if (currentScene < 0 || currentScene >= SCENES.length - 1) playScene(0);
+                else playScene(currentScene);
             }
         };
 
@@ -820,21 +784,11 @@
             subtitlesEnabled = !subtitlesEnabled;
             var bar = document.getElementById('subtitle-bar');
             var btn = document.getElementById('btn-sub');
-            if (subtitlesEnabled) {
-                bar.classList.remove('hidden-sub');
-                btn.classList.add('active');
-            } else {
-                bar.classList.add('hidden-sub');
-                btn.classList.remove('active');
-            }
+            if (subtitlesEnabled) { bar.classList.remove('hidden-sub'); btn.classList.add('active'); }
+            else { bar.classList.add('hidden-sub'); btn.classList.remove('active'); }
         };
 
         document.getElementById('btn-sub').classList.add('active');
-
-        if ('speechSynthesis' in window) {
-            speechSynthesis.getVoices();
-            speechSynthesis.onvoiceschanged = function() { speechSynthesis.getVoices(); };
-        }
     })();
     </script>
 </body>

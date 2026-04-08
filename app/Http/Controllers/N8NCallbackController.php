@@ -6,6 +6,7 @@ use App\Models\VideoProject;
 use App\Services\PollinationsVideoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class N8NCallbackController extends Controller
@@ -91,6 +92,9 @@ class N8NCallbackController extends Controller
                 }
             }
             unset($scene);
+
+            // Pre-generate TTS audio for all scenes so it's cached before the user opens the page
+            $this->preGenerateTTS($project->id, $scenes);
 
             $project->update([
                 'status'        => 'done',
@@ -283,5 +287,52 @@ class N8NCallbackController extends Controller
         $prompt .= ', cinematic animated movie still, coherent character design, soft lighting, scene ' . ($index + 1);
 
         return mb_substr(trim($prompt), 0, 500);
+    }
+
+    private function preGenerateTTS(int $projectId, array $scenes): void
+    {
+        $apiKey = (string) config('services.pollinations_video.api_key', '');
+        if ($apiKey === '') {
+            return;
+        }
+
+        $cacheDir = storage_path('app/tts');
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+
+        foreach ($scenes as $scene) {
+            $sceneNum = (int) ($scene['scene_number'] ?? 0);
+            $narration = trim((string) ($scene['narration'] ?? ''));
+            if ($sceneNum < 1 || $narration === '') {
+                continue;
+            }
+
+            $cacheFile = "{$cacheDir}/tts_{$projectId}_{$sceneNum}_narratrice.mp3";
+            if (file_exists($cacheFile)) {
+                continue;
+            }
+
+            try {
+                $text = mb_substr($narration, 0, 4000);
+                $encodedText = rawurlencode($text);
+
+                $response = Http::timeout(20)
+                    ->retry(1, 1000)
+                    ->get("https://gen.pollinations.ai/audio/{$encodedText}", [
+                        'voice' => 'nova',
+                        'key'   => $apiKey,
+                    ]);
+
+                if ($response->successful() && strlen($response->body()) > 1000) {
+                    file_put_contents($cacheFile, $response->body());
+                    Log::info("TTS pre-generated for project #{$projectId} scene #{$sceneNum}");
+                }
+            } catch (\Throwable $e) {
+                Log::warning("TTS pre-generation failed for project #{$projectId} scene #{$sceneNum}", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 }
