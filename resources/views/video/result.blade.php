@@ -416,15 +416,13 @@
 
         var preloadedImages = {};
         var preloadedAudio = {};
-        var preloadedVideos = {}; // pre-buffered video elements
+        var preloadedVideos = {};
         var allMediaReady = false;
 
-        var totalItems = SCENES.length * 2; // images + audio
+        var totalItems = SCENES.length * 2;
         var loadedItems = 0;
         var audioRetryMax = 10;
         var audioRetryDelay = 2500;
-
-        /* ===== PRELOAD UI ===== */
 
         function updatePreloadUI() {
             var pct = totalItems > 0 ? Math.round((loadedItems / totalItems) * 100) : 100;
@@ -437,7 +435,6 @@
             if (loadedItems >= totalItems && !allMediaReady) {
                 allMediaReady = true;
                 if (label) label.textContent = 'Film pret !';
-                // Start pre-buffering videos for first 3 scenes
                 for (var v = 0; v < Math.min(3, SCENES.length); v++) prebufferVideo(v);
                 setTimeout(function() {
                     var overlay = document.getElementById('preload-overlay');
@@ -462,8 +459,6 @@
             if (scene && scene.fallback_image_url) return scene.fallback_image_url;
             return 'https://picsum.photos/seed/akv-' + PROJECT_ID + '-' + (idx + 1) + '/1280/720';
         }
-
-        /* ===== IMAGE PRELOAD ===== */
 
         (function preloadImages() {
             var queue = [];
@@ -503,8 +498,6 @@
 
             for (var c = 0; c < Math.min(concurrency, SCENES.length); c++) next();
         })();
-
-        /* ===== AUDIO PRELOAD (with retries) ===== */
 
         (function preloadAllAudio() {
             for (var i = 0; i < SCENES.length; i++) {
@@ -547,8 +540,6 @@
                 });
         }
 
-        /* ===== VIDEO PRE-BUFFER ===== */
-
         function prebufferVideo(idx) {
             var scene = SCENES[idx];
             if (!scene) return;
@@ -567,14 +558,9 @@
             video.onloadeddata = function() {
                 preloadedVideos[idx] = video;
             };
-            video.onerror = function() {
-                // video failed, will use image only
-            };
-            // trigger download
+            video.onerror = function() {};
             video.load();
         }
-
-        /* ===== CINEMA DISPLAY ===== */
 
         function getKBEffect(index) {
             return KB_EFFECTS[index % KB_EFFECTS.length];
@@ -591,7 +577,6 @@
             if (placeholder) placeholder.style.display = 'none';
             overlay.style.display = '';
 
-            // Fade out old media
             screen.querySelectorAll('.active-media').forEach(function(el) {
                 el.classList.remove('active-media');
                 KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
@@ -603,10 +588,8 @@
             var sceneVideoUrl = (scene.video_url || '').trim();
 
             if (sceneVideoUrl !== '') {
-                // Check if we have a pre-buffered video ready
                 var buffered = preloadedVideos[index];
                 if (buffered && buffered.readyState >= 2) {
-                    // Use pre-buffered video directly — no image poster needed
                     var v = buffered;
                     v.className = 'hidden-media';
                     v.style.zIndex = '3';
@@ -616,10 +599,8 @@
                     v.classList.remove('hidden-media');
                     v.classList.add('active-media');
                     v.play().catch(function() {});
-                    // Remove from cache so it can be re-created later
                     delete preloadedVideos[index];
                 } else {
-                    // Show image as brief cover, then crossfade to video
                     showImageCover(screen, index, scene, overlay);
 
                     var video = document.createElement('video');
@@ -645,7 +626,6 @@
 
                     video.onloadeddata = function() {
                         clearTimeout(loadTimeout);
-                        // Brief image cover: replace with video after 200ms
                         setTimeout(function() {
                             if (videoFailed) return;
                             screen.querySelectorAll('img.active-media').forEach(function(img) {
@@ -663,21 +643,17 @@
                     screen.insertBefore(video, overlay);
                 }
             } else {
-                // No video — image with Ken Burns
                 showImageCover(screen, index, scene, overlay);
             }
 
-            // Pre-buffer next 2 scenes' videos
             prebufferVideo(index + 1);
             prebufferVideo(index + 2);
 
-            // Subtitles
             var subtitleText = document.getElementById('subtitle-text');
             var subtitleBar = document.getElementById('subtitle-bar');
             subtitleText.textContent = scene.narration || '';
             if (subtitlesEnabled) subtitleBar.classList.remove('hidden-sub');
 
-            // Scene indicators (subtle)
             var label = document.getElementById('cinema-scene-label');
             var part = scene.part || 'development';
             label.textContent = 'Scene ' + (scene.scene_number || index + 1);
@@ -686,12 +662,10 @@
             document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
             document.getElementById('progress-fill').style.width = (((index + 1) / SCENES.length) * 100) + '%';
 
-            // Highlight thumbnail
             document.querySelectorAll('[id^="thumb-wrap-"]').forEach(function(t) { t.style.borderColor = 'transparent'; });
             var tw = document.getElementById('thumb-wrap-' + index);
             if (tw) { tw.style.borderColor = '#a855f7'; tw.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
 
-            // Highlight scene card
             document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
             var card = document.getElementById('scene-card-' + index);
             if (card) card.classList.add('active-scene');
@@ -721,8 +695,6 @@
             image.classList.add(getKBEffect(index));
         }
 
-        /* ===== AUDIO PLAYBACK ===== */
-
         function playSceneAudio(index, onEnd) {
             var scene = SCENES[index];
             if (!scene || !scene.narration) { onEnd(); return; }
@@ -747,15 +719,12 @@
             if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
         }
 
-        /* ===== CONTINUOUS FILM PLAYBACK ===== */
-
         function playScene(index) {
             if (index >= SCENES.length) { stopPlayback(); return; }
 
             showScene(index);
 
             var scene = SCENES[index];
-            // Scene advances as soon as audio finishes (min 3s for very short narrations)
             var audioDone = false;
             var minTimeDone = false;
             var minDur = 3000;
@@ -777,7 +746,6 @@
                 advance();
             }, minDur);
 
-            // Safety: if audio never fires `ended`, force advance after scene duration + 8s
             var maxDur = Math.max(5, (scene.duration_seconds || 12)) * 1000;
             fallbackTimer = setTimeout(function() {
                 if (isPlaying && currentScene === index) {

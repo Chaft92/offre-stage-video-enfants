@@ -93,7 +93,6 @@ class N8NCallbackController extends Controller
             }
             unset($scene);
 
-            // Pre-generate TTS audio for all scenes so it's cached before the user opens the page
             $this->preGenerateTTS($project->id, $scenes);
 
             $project->update([
@@ -256,7 +255,6 @@ class N8NCallbackController extends Controller
     {
         $validVoices = ['narratrice', 'narrateur', 'enfant_fille', 'enfant_garcon'];
 
-        // Force narratrice for consistent storytelling voice
         return 'narratrice';
     }
 
@@ -270,7 +268,6 @@ class N8NCallbackController extends Controller
         $base = preg_replace('/\s+/', ' ', $base ?? '') ?: '';
         $base = mb_substr($base, 0, 300);
 
-        // Build a SHORT character tag (max ~120 chars) so scene-specific content dominates
         $charTag = '';
         if ($characters !== '') {
             $charTag .= mb_substr($characters, 0, 80);
@@ -279,7 +276,6 @@ class N8NCallbackController extends Controller
             $charTag .= ($charTag !== '' ? ', ' : '') . mb_substr($setting, 0, 60);
         }
 
-        // Scene-specific action FIRST, then style + character context AFTER
         $prompt = $base;
         if ($charTag !== '') {
             $prompt .= ', ' . $charTag;

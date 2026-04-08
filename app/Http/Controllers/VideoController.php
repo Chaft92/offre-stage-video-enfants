@@ -185,7 +185,7 @@ class VideoController extends Controller
 
     public function download(int $id)
     {
-        set_time_limit(600); // Allow up to 10 min for downloading all media
+        set_time_limit(600);
 
         $project = VideoProject::findOrFail($id);
         abort_unless($project->isDone(), 404, 'Projet non disponible.');
@@ -255,7 +255,6 @@ class VideoController extends Controller
                 $zip->addFromString('video_complete.url', "[InternetShortcut]\nURL={$videoUrl}\n");
             }
 
-            // Download images, videos, and narrator audio for each scene.
             $pollinationsVideo = app(\App\Services\PollinationsVideoService::class);
             $sceneMedia = [];
             foreach ($scenes as $s) {
@@ -270,7 +269,6 @@ class VideoController extends Controller
                     'audio' => null,
                 ];
 
-                // Download image
                 $imagePrompt = trim((string) ($s['image_prompt'] ?? ''));
                 if ($imagePrompt === '') {
                     $imagePrompt = $pollinationsVideo->extractPrompt($s);
@@ -293,7 +291,6 @@ class VideoController extends Controller
                     }
                 }
 
-                // Download video
                 if (!empty($s['video_url']) && $pollinationsVideo->videoEnabled()) {
                     $videoPrompt = trim((string) ($s['image_prompt'] ?? ''));
                     if ($videoPrompt === '') {
@@ -330,7 +327,6 @@ class VideoController extends Controller
                 }
             }
 
-            // Build a final montage video (~3 minutes) with narration when ffmpeg is available.
             $finalVideo = $this->buildFinalMontage($project->id, $scenes, $sceneMedia, $workDir);
             if ($finalVideo && is_file($finalVideo)) {
                 $videoBody = @file_get_contents($finalVideo);
@@ -598,35 +594,17 @@ class VideoController extends Controller
             'EXPLICATION DU WORKFLOW',
             str_repeat('=', 48),
             '',
-            '1) Lancement du projet',
-            '   - L utilisateur saisit un theme.',
-            '   - Laravel cree un projet puis appelle le webhook n8n.',
+            'Je demarre le projet en saisissant un theme. Mon application Laravel cree ensuite le projet et declenche le webhook n8n.',
             '',
-            '2) Generation du contenu narratif',
-            '   - n8n appelle le LLM (Groq) pour produire:',
-            '     * histoire complete',
-            '     * decoupage en scenes',
-            '     * narration scene par scene.',
+            'Je genere ensuite le contenu narratif. Le workflow n8n appelle le modele Groq pour produire l histoire complete, le decoupage des scenes et la narration scene par scene.',
             '',
-            '3) Generation visuelle',
-            '   - Pour chaque scene, un prompt image est construit.',
-            '   - Pollinations genere les images puis les clips video.',
+            'Je construis un prompt visuel pour chaque scene puis je genere les images et les clips video avec Pollinations.',
             '',
-            '4) Generation audio',
-            '   - Chaque narration est convertie en audio (voix narratrice nova).',
-            '   - Les mp3 sont caches cote serveur.',
+            'Je transforme chaque narration en audio avec la voix narratrice nova. Les fichiers mp3 sont caches cote serveur pour accelerer le chargement.',
             '',
-            '5) Callback et affichage',
-            '   - n8n envoie les resultats a Laravel (callback).',
-            '   - La page resultat precharge images/audio puis lit le film.',
+            'Je recois ensuite le callback n8n dans Laravel, je stocke les scenes et je precharge les medias sur la page resultat avant lecture.',
             '',
-            '6) Export livrables',
-            '   - Le bouton telechargement cree un ZIP contenant:',
-            '     * histoire',
-            '     * script et decoupage des scenes',
-            '     * clips video',
-            '     * audio narrateur',
-            '     * video finale montee (~3 min) si ffmpeg est disponible.',
+            'Je termine en exportant les livrables dans un ZIP avec l histoire, le script, le decoupage des scenes, les clips, les audios narrateur et la video finale montee quand ffmpeg est disponible.',
         ]);
     }
 
@@ -675,7 +653,6 @@ class VideoController extends Controller
             abort(503, 'Service video indisponible.');
         }
 
-        // Use image_prompt (scene-specific + character tag) for video too, so each scene gets a unique video
         $prompt = trim((string) ($scene['image_prompt'] ?? ''));
         if ($prompt === '') {
             $prompt = $pollinationsVideo->extractPrompt($scene);
@@ -713,7 +690,6 @@ class VideoController extends Controller
             'enfant_garcon' => 'echo',
         ];
 
-        // Force narratrice for consistent voice across all scenes
         $voice = $voiceMap['narratrice'];
 
         $cacheDir  = storage_path('app/tts');

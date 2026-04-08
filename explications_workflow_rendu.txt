@@ -1,0 +1,19 @@
+EXPPLICATIONS WORKFLOW RENDU
+
+Je lance la creation d un projet en saisissant un theme sur l interface. Laravel enregistre le projet en base avec un statut de traitement puis envoie une requete au webhook n8n.
+
+Je pilote ensuite la generation de contenu dans n8n. Le workflow interroge le modele de langage pour produire l histoire complete, la morale, le decoupage en huit scenes et la narration associee a chaque scene.
+
+Je normalise les scenes cote backend pour garder une structure exploitable. Je verifie la numerotation, la qualite des textes, la duree de chaque scene et la coherence des champs attendus.
+
+Je prepare ensuite les prompts visuels. Pour chaque scene, je construis une description image adaptee au contexte narratif puis je genere l illustration et le clip video correspondant via Pollinations.
+
+Je genere aussi la narration audio. Pour chaque scene, je transforme le texte en voix narratrice et je mets les fichiers mp3 en cache serveur pour accelerer la lecture et eviter des appels repetes.
+
+Je recois le callback final de n8n quand la generation est terminee. Je stocke toutes les donnees utiles dans le projet et je passe le statut en termine pour afficher la page resultat.
+
+Je precharge les medias dans le lecteur afin d offrir une lecture continue. Les audios et les images sont charges en amont, les videos sont prebufferisees, et la navigation par scene reste possible depuis la liste en bas de page.
+
+Je construis enfin le livrable de rendu au format ZIP. J y inclus l histoire, le decoupage des scenes, les scripts de narration, les images, les clips video, les audios narrateur, ainsi qu une video finale montee quand ffmpeg est disponible sur l environnement.
+
+Je livre un projet qui reste reproductible. La configuration Railway deploie l application Laravel, l integration n8n gere l orchestration IA, et l ensemble permet de regenerer un rendu complet a partir d un nouveau theme.
