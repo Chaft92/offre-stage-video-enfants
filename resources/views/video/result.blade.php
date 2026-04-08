@@ -46,7 +46,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: opacity 0.5s ease-in-out;
+            transition: opacity 0.25s ease-in-out;
         }
         .cinema-screen .hidden-media { opacity: 0; }
         .cinema-screen .active-media { opacity: 1; }
@@ -368,7 +368,7 @@
                     $voiceType = $scene['voice'] ?? 'narratrice';
                     $voiceLabel = $voiceLabels[$voiceType] ?? 'Narratrice';
                 @endphp
-                <div class="scene-list-item p-4" id="scene-card-{{ $i }}">
+                <div class="scene-list-item p-4 cursor-pointer" id="scene-card-{{ $i }}" onclick="jumpToScene({{ $i }})">
                     <div class="flex gap-4">
                         <div class="w-32 h-20 rounded-lg flex-shrink-0 cursor-pointer bg-gray-800 overflow-hidden" onclick="jumpToScene({{ $i }})">
                             <img id="scene-img-{{ $i }}" alt="Scene {{ $sceneNum }}" class="w-full h-full object-cover" style="opacity:0;transition:opacity 0.3s;">
@@ -416,9 +416,10 @@
 
         var preloadedImages = {};
         var preloadedAudio = {};
+        var preloadedVideos = {}; // pre-buffered video elements
         var allMediaReady = false;
 
-        var totalItems = SCENES.length * 2;
+        var totalItems = SCENES.length * 2; // images + audio
         var loadedItems = 0;
         var audioRetryMax = 10;
         var audioRetryDelay = 2500;
@@ -436,15 +437,17 @@
             if (loadedItems >= totalItems && !allMediaReady) {
                 allMediaReady = true;
                 if (label) label.textContent = 'Film pret !';
+                // Start pre-buffering videos for first 3 scenes
+                for (var v = 0; v < Math.min(3, SCENES.length); v++) prebufferVideo(v);
                 setTimeout(function() {
                     var overlay = document.getElementById('preload-overlay');
                     if (overlay) overlay.classList.add('done');
                     autoStartFilm();
-                }, 500);
+                }, 400);
             } else if (label && !allMediaReady) {
                 var imgDone = Object.keys(preloadedImages).length;
                 var audioDone = Object.keys(preloadedAudio).length;
-                label.textContent = 'Preparation du film... Images ' + imgDone + '/' + SCENES.length + ' \u00b7 Audio ' + audioDone + '/' + SCENES.length;
+                label.textContent = 'Preparation du film... Images ' + imgDone + '/' + SCENES.length + ' · Audio ' + audioDone + '/' + SCENES.length;
             }
         }
 
@@ -460,7 +463,7 @@
             return 'https://picsum.photos/seed/akv-' + PROJECT_ID + '-' + (idx + 1) + '/1280/720';
         }
 
-        /* ===== IMAGE PRELOAD (concurrent, 3 at a time) ===== */
+        /* ===== IMAGE PRELOAD ===== */
 
         (function preloadImages() {
             var queue = [];
@@ -544,25 +547,159 @@
                 });
         }
 
+        /* ===== VIDEO PRE-BUFFER ===== */
+
+        function prebufferVideo(idx) {
+            var scene = SCENES[idx];
+            if (!scene) return;
+            var url = (scene.video_url || '').trim();
+            if (!url || preloadedVideos[idx]) return;
+
+            var video = document.createElement('video');
+            video.src = url;
+            video.preload = 'auto';
+            video.muted = true;
+            video.playsInline = true;
+            video.loop = true;
+            video.setAttribute('playsinline', 'playsinline');
+            video.style.zIndex = '3';
+
+            video.onloadeddata = function() {
+                preloadedVideos[idx] = video;
+            };
+            video.onerror = function() {
+                // video failed, will use image only
+            };
+            // trigger download
+            video.load();
+        }
+
         /* ===== CINEMA DISPLAY ===== */
 
         function getKBEffect(index) {
             return KB_EFFECTS[index % KB_EFFECTS.length];
         }
 
-        function clearScreen() {
+        function showScene(index) {
+            if (index < 0 || index >= SCENES.length) return;
+
             var screen = document.getElementById('cinema-screen');
+            var placeholder = document.getElementById('cinema-placeholder');
             var overlay = document.getElementById('cinema-overlay');
+            var scene = SCENES[index];
+
+            if (placeholder) placeholder.style.display = 'none';
+            overlay.style.display = '';
+
+            // Fade out old media
             screen.querySelectorAll('.active-media').forEach(function(el) {
                 el.classList.remove('active-media');
                 KB_EFFECTS.forEach(function(k) { el.classList.remove(k); });
                 el.classList.add('hidden-media');
                 if (el.tagName === 'VIDEO') { try { el.pause(); } catch(e) {} }
-                setTimeout(function() { el.remove(); }, 600);
+                setTimeout(function() { el.remove(); }, 300);
             });
+
+            var sceneVideoUrl = (scene.video_url || '').trim();
+
+            if (sceneVideoUrl !== '') {
+                // Check if we have a pre-buffered video ready
+                var buffered = preloadedVideos[index];
+                if (buffered && buffered.readyState >= 2) {
+                    // Use pre-buffered video directly — no image poster needed
+                    var v = buffered;
+                    v.className = 'hidden-media';
+                    v.style.zIndex = '3';
+                    v.currentTime = 0;
+                    screen.insertBefore(v, overlay);
+                    v.offsetHeight;
+                    v.classList.remove('hidden-media');
+                    v.classList.add('active-media');
+                    v.play().catch(function() {});
+                    // Remove from cache so it can be re-created later
+                    delete preloadedVideos[index];
+                } else {
+                    // Show image as brief cover, then crossfade to video
+                    showImageCover(screen, index, scene, overlay);
+
+                    var video = document.createElement('video');
+                    video.src = sceneVideoUrl;
+                    video.className = 'hidden-media';
+                    video.preload = 'auto';
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.loop = true;
+                    video.setAttribute('playsinline', 'playsinline');
+                    video.style.zIndex = '3';
+
+                    var videoFailed = false;
+                    function fallbackToImage() {
+                        if (videoFailed) return;
+                        videoFailed = true;
+                        try { video.pause(); } catch(e) {}
+                        video.remove();
+                    }
+
+                    video.onerror = fallbackToImage;
+                    var loadTimeout = setTimeout(fallbackToImage, 30000);
+
+                    video.onloadeddata = function() {
+                        clearTimeout(loadTimeout);
+                        // Brief image cover: replace with video after 200ms
+                        setTimeout(function() {
+                            if (videoFailed) return;
+                            screen.querySelectorAll('img.active-media').forEach(function(img) {
+                                img.classList.remove('active-media');
+                                KB_EFFECTS.forEach(function(k) { img.classList.remove(k); });
+                                img.classList.add('hidden-media');
+                                setTimeout(function() { img.remove(); }, 300);
+                            });
+                            video.classList.remove('hidden-media');
+                            video.classList.add('active-media');
+                            video.play().catch(function() { fallbackToImage(); });
+                        }, 200);
+                    };
+
+                    screen.insertBefore(video, overlay);
+                }
+            } else {
+                // No video — image with Ken Burns
+                showImageCover(screen, index, scene, overlay);
+            }
+
+            // Pre-buffer next 2 scenes' videos
+            prebufferVideo(index + 1);
+            prebufferVideo(index + 2);
+
+            // Subtitles
+            var subtitleText = document.getElementById('subtitle-text');
+            var subtitleBar = document.getElementById('subtitle-bar');
+            subtitleText.textContent = scene.narration || '';
+            if (subtitlesEnabled) subtitleBar.classList.remove('hidden-sub');
+
+            // Scene indicators (subtle)
+            var label = document.getElementById('cinema-scene-label');
+            var part = scene.part || 'development';
+            label.textContent = 'Scene ' + (scene.scene_number || index + 1);
+            label.className = 'scene-badge-part part-' + part;
+            document.getElementById('cinema-voice-badge').textContent = 'Narratrice';
+            document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
+            document.getElementById('progress-fill').style.width = (((index + 1) / SCENES.length) * 100) + '%';
+
+            // Highlight thumbnail
+            document.querySelectorAll('[id^="thumb-wrap-"]').forEach(function(t) { t.style.borderColor = 'transparent'; });
+            var tw = document.getElementById('thumb-wrap-' + index);
+            if (tw) { tw.style.borderColor = '#a855f7'; tw.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
+
+            // Highlight scene card
+            document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
+            var card = document.getElementById('scene-card-' + index);
+            if (card) card.classList.add('active-scene');
+
+            currentScene = index;
         }
 
-        function showImageForScene(screen, index, scene, overlay) {
+        function showImageCover(screen, index, scene, overlay) {
             var cached = preloadedImages[index];
             var image;
             if (cached) {
@@ -584,90 +721,7 @@
             image.classList.add(getKBEffect(index));
         }
 
-        function showScene(index) {
-            if (index < 0 || index >= SCENES.length) return;
-
-            var screen = document.getElementById('cinema-screen');
-            var placeholder = document.getElementById('cinema-placeholder');
-            var overlay = document.getElementById('cinema-overlay');
-            var scene = SCENES[index];
-
-            if (placeholder) placeholder.style.display = 'none';
-            overlay.style.display = '';
-
-            clearScreen();
-
-            var sceneVideoUrl = (scene.video_url || '').trim();
-            if (sceneVideoUrl !== '') {
-                showImageForScene(screen, index, scene, overlay);
-
-                var video = document.createElement('video');
-                video.src = sceneVideoUrl;
-                video.className = 'hidden-media';
-                video.preload = 'auto';
-                video.muted = true;
-                video.playsInline = true;
-                video.loop = true;
-                video.setAttribute('playsinline', 'playsinline');
-                video.style.zIndex = '3';
-
-                var videoFailed = false;
-                function fallbackToImage() {
-                    if (videoFailed) return;
-                    videoFailed = true;
-                    try { video.pause(); } catch(e) {}
-                    video.remove();
-                }
-
-                video.onerror = fallbackToImage;
-                var loadTimeout = setTimeout(fallbackToImage, 45000);
-
-                video.onloadeddata = function() {
-                    clearTimeout(loadTimeout);
-                    setTimeout(function() {
-                        if (videoFailed) return;
-                        screen.querySelectorAll('img.active-media').forEach(function(img) {
-                            img.classList.remove('active-media');
-                            KB_EFFECTS.forEach(function(k) { img.classList.remove(k); });
-                            img.classList.add('hidden-media');
-                            setTimeout(function() { img.remove(); }, 600);
-                        });
-                        video.classList.remove('hidden-media');
-                        video.classList.add('active-media');
-                        video.play().catch(function() { fallbackToImage(); });
-                    }, 800);
-                };
-
-                screen.insertBefore(video, overlay);
-            } else {
-                showImageForScene(screen, index, scene, overlay);
-            }
-
-            var subtitleText = document.getElementById('subtitle-text');
-            var subtitleBar = document.getElementById('subtitle-bar');
-            subtitleText.textContent = scene.narration || '';
-            if (subtitlesEnabled) subtitleBar.classList.remove('hidden-sub');
-
-            var label = document.getElementById('cinema-scene-label');
-            var part = scene.part || 'development';
-            label.textContent = 'Scene ' + (scene.scene_number || index + 1);
-            label.className = 'scene-badge-part part-' + part;
-            document.getElementById('cinema-voice-badge').textContent = 'Narratrice';
-            document.getElementById('scene-counter').textContent = (index + 1) + ' / ' + SCENES.length;
-            document.getElementById('progress-fill').style.width = (((index + 1) / SCENES.length) * 100) + '%';
-
-            document.querySelectorAll('[id^="thumb-wrap-"]').forEach(function(t) { t.style.borderColor = 'transparent'; });
-            var tw = document.getElementById('thumb-wrap-' + index);
-            if (tw) { tw.style.borderColor = '#a855f7'; tw.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
-
-            document.querySelectorAll('.scene-list-item').forEach(function(c) { c.classList.remove('active-scene'); });
-            var card = document.getElementById('scene-card-' + index);
-            if (card) card.classList.add('active-scene');
-
-            currentScene = index;
-        }
-
-        /* ===== AUDIO PLAYBACK (preloaded only, no browser TTS) ===== */
+        /* ===== AUDIO PLAYBACK ===== */
 
         function playSceneAudio(index, onEnd) {
             var scene = SCENES[index];
@@ -693,7 +747,7 @@
             if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
         }
 
-        /* ===== SEAMLESS MONTAGE PLAYBACK ===== */
+        /* ===== CONTINUOUS FILM PLAYBACK ===== */
 
         function playScene(index) {
             if (index >= SCENES.length) { stopPlayback(); return; }
@@ -701,12 +755,13 @@
             showScene(index);
 
             var scene = SCENES[index];
-            var dur = Math.max(4, (scene.duration_seconds || 15)) * 1000;
+            // Scene advances as soon as audio finishes (min 3s for very short narrations)
             var audioDone = false;
-            var timeDone = false;
+            var minTimeDone = false;
+            var minDur = 3000;
 
             function advance() {
-                if (audioDone && timeDone && isPlaying && currentScene === index) {
+                if (audioDone && minTimeDone && isPlaying && currentScene === index) {
                     playScene(index + 1);
                 }
             }
@@ -718,16 +773,18 @@
             });
 
             sceneTimer = setTimeout(function() {
-                timeDone = true;
+                minTimeDone = true;
                 advance();
-            }, dur);
+            }, minDur);
 
+            // Safety: if audio never fires `ended`, force advance after scene duration + 8s
+            var maxDur = Math.max(5, (scene.duration_seconds || 12)) * 1000;
             fallbackTimer = setTimeout(function() {
                 if (isPlaying && currentScene === index) {
                     stopAllAudio();
                     playScene(index + 1);
                 }
-            }, dur + 10000);
+            }, maxDur + 8000);
         }
 
         function autoStartFilm() {
